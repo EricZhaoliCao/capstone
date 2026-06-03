@@ -667,7 +667,7 @@ Figure~\ref{fig:warren_strategy_overview} summarises the strategy logic. The str
 \begin{figure}[htbp]
     \centering
     \includegraphics[width=\linewidth]{figures/warren_strategy_high_level_overview_slide.png}
-    \caption{High-level strategy map. The trade is same-asset and cross-exchange: long the low expected-funding venue, short the high expected-funding venue, and require the expected capture to survive cost and quality filters.}
+    \caption{\textbf{High-level strategy map.} The trade is same-asset and cross-exchange: long the low expected-funding venue, short the high expected-funding venue, and require the expected capture to survive cost and quality filters.}
     \label{fig:warren_strategy_overview}
 \end{figure}
 
@@ -702,7 +702,7 @@ Figure~\ref{fig:warren_trade_mechanics} illustrates the intended trade path. The
 \begin{figure}[htbp]
     \centering
     \includegraphics[width=\linewidth]{figures/warren_funding_trade_mechanics_example_clean.png}
-    \caption{Illustrative trade mechanics. The chart is synthetic, not a realised trade: enter when the high- and low-funding venues diverge, collect funding payments, and exit after compression.}
+    \caption{\textbf{Illustrative trade mechanics.} The chart is synthetic, not a realised trade: enter when the high- and low-funding venues diverge, collect funding payments, and exit after compression.}
     \label{fig:warren_trade_mechanics}
 \end{figure}
 
@@ -719,7 +719,7 @@ The 30 bps entry threshold and the 15 bps OI/flow penalty were chosen from walk-
 \begin{figure}[htbp]
     \centering
     \includegraphics[width=\linewidth]{figures/warren_parameter_selection_walk_forward_visual.png}
-    \caption{Walk-forward parameter sensitivity. The chosen cost buffer and OI/flow penalty are not treated as magic constants; they reflect a moderate region where filtering improves later-window robustness without eliminating the opportunity set.}
+    \caption{\textbf{Walk-forward parameter sensitivity.} The chosen cost buffer and OI/flow penalty are not treated as magic constants; they reflect a moderate region where filtering improves later-window robustness without eliminating the opportunity set.}
     \label{fig:warren_parameter_selection}
 \end{figure}
 
@@ -729,7 +729,7 @@ The pre-slippage backtest is profitable, but the result changes materially after
 
 \begin{table}[H]
     \centering
-    \caption{Headline performance of Strategy 2.1.}
+    \caption{\textbf{Headline performance of Strategy 2.1.}}
     \label{tab:warren_headline}
     \begin{tabular}{lrr}
         \toprule
@@ -750,7 +750,7 @@ Figure~\ref{fig:warren_equity_curve} shows the post-slippage equity curve. The r
 \begin{figure}[htbp]
     \centering
     \includegraphics[width=\linewidth]{figures/warren_strategy_5k_missing2bps_leg_equity_curve.png}
-    \caption{Post-slippage equity curve at 5,000 dollars per leg. The strategy remains slightly positive, but the path is uneven and basis-sensitive.}
+    \caption{\textbf{Post-slippage equity curve at 5,000 dollars per leg.} The strategy remains slightly positive, but the path is uneven and basis-sensitive.}
     \label{fig:warren_equity_curve}
 \end{figure}
 
@@ -760,7 +760,7 @@ The attribution in Table~\ref{tab:warren_attribution} is the most important diag
 
 \begin{table}[H]
     \centering
-    \caption{PnL attribution after the 5,000 dollar slippage stress.}
+    \caption{\textbf{PnL attribution after the 5,000 dollar slippage stress.}}
     \label{tab:warren_attribution}
     \begin{tabular}{lr}
         \toprule
@@ -779,7 +779,7 @@ The attribution in Table~\ref{tab:warren_attribution} is the most important diag
 \begin{figure}[htbp]
     \centering
     \includegraphics[width=\linewidth]{figures/warren_pnl_attribution_page_5k_missing2bps_leg.png}
-    \caption{PnL decomposition. Funding is the gross source of return, while fees, slippage, and basis movement are the main drags.}
+    \caption{\textbf{PnL decomposition.} Funding is the gross source of return, while fees, slippage, and basis movement are the main drags.}
     \label{fig:warren_pnl_decomposition}
 \end{figure}
 
@@ -788,7 +788,7 @@ Trade-level diagnostics support the same interpretation. Some large winners are 
 \begin{figure}[htbp]
     \centering
     \includegraphics[width=\linewidth]{figures/warren_trade_examples_audit_table.png}
-    \caption{Trade examples. Individual trades show why funding PnL must be separated from basis PnL before interpreting the edge.}
+    \caption{\textbf{Trade examples.} Individual trades show why funding PnL must be separated from basis PnL before interpreting the edge.}
     \label{fig:warren_trade_examples}
 \end{figure}
 
@@ -798,7 +798,7 @@ Capacity is the binding practical question. Table~\ref{tab:warren_capacity} repo
 
 \begin{table}[H]
     \centering
-    \caption{Capacity/slippage stress by notional per leg.}
+    \caption{\textbf{Capacity/slippage stress by notional per leg.}}
     \label{tab:warren_capacity}
     \begin{tabular}{lrrr}
         \toprule
@@ -814,7 +814,7 @@ Capacity is the binding practical question. Table~\ref{tab:warren_capacity} repo
 \begin{figure}[htbp]
     \centering
     \includegraphics[width=\linewidth]{figures/warren_capacity_slippage_1k_5k_10k_final.png}
-    \caption{Capacity stress. Increasing per-leg notional quickly consumes the funding edge because many trades rely on incomplete or shallow depth.}
+    \caption{\textbf{Capacity stress.} Increasing per-leg notional quickly consumes the funding edge because many trades rely on incomplete or shallow depth.}
     \label{fig:warren_capacity}
 \end{figure}
 
