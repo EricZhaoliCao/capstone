@@ -12,14 +12,17 @@ Single combined LaTeX report merging all four contributions.
    tables OCR'd from the original images.
 2. **Strategy 1: Rule-Based Cross-Exchange Capture** — Chen Junan (3036555025);
    converted from `cja/report/main.typ`.
-3. **Strategy 2: Cost-Aware Positive Funding-Basis Carry** — Liang Mengxuan
+3. **Strategy 2: Dual-Engine Funding + Momentum Long/Short** — Deng Xuying
+   (3036555556) and Liang Jiarui (student ID TBC); converted from
+   `ljr&dxy/Funding+Momentum.docx`, 3 figures (`ljr_fig*`).
+4. **Strategy 3: Cost-Aware Positive Funding-Basis Carry** — Liang Mengxuan
    (3036551495); converted from the `.docx`, redundant intro/lit-review/
    conclusion trimmed, 7 figures placed in original document order.
-4. **Strategy 3: Cross-Exchange Spread + Negative Cash-and-Carry** — Cao Zhaoli
+5. **Strategy 4: Cross-Exchange Spread + Negative Cash-and-Carry** — Cao Zhaoli
    (3036668420); the original `Funding_Arbitrage` body, headings demoted one
    level, its standalone intro/conclusion folded into the shared ones.
-5. **Conclusion** — unified synthesis of all three strategies.
-6. **References** — single merged list (IEEEtran style).
+6. **Conclusion** — unified synthesis of all four strategies.
+7. **References** — single merged list (IEEEtran style).
 
 Each part carries its author's name + student ID as a byline under the heading.
 

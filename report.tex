@@ -84,19 +84,22 @@ strategy space along two dimensions---asset class and exchange---and each
 team member develops one strategy within it.  \textbf{Strategy~1} is a
 rule-based, deferred-decision cross-exchange capture on
 KAITO~(\textsc{hype}--\textsc{okex}) that earns an out-of-sample Sharpe of
-$2.35$ but is fragile to slippage and timing.  \textbf{Strategy~2} is a
-cost-aware positive funding-basis carry on Binance (BTC/ETH/SOL) that,
-after real spread calibration, reaches a normalised net PnL of $0.0462$
-(Sharpe $7.65$, max drawdown $-0.11\%$) by trading only the
-positive-funding, positive-basis subset.  \textbf{Strategy~3} shows that
-the na\"ive funding-rank cross-section \emph{loses} money on full PnL
-(Sharpe $-2.54$) and builds two delta-neutral trades instead: a scalable
-cross-exchange spread (Strategy~A, Sharpe $2.34$) and a negative
-cash-and-carry (Strategy~B, in-regime $7.47$, honestly de-risked to
-$\approx 3$ and capped at \$130{,}926).  Across all three, the common
-lesson is the same: funding carry is real but small, survives only when
-price risk and execution cost are accounted for honestly, and is bounded
-by capacity and regime rather than by signal quality.
+$2.35$ but is fragile to slippage and timing.  \textbf{Strategy~2} blends a
+funding-rate engine with a technical-momentum engine into a weekly,
+dollar-neutral long/short CTREND book that returns $+48.2\%$ against a
+$-66.3\%$ market (Sharpe $1.98$).  \textbf{Strategy~3} is a cost-aware
+positive funding-basis carry on Binance (BTC/ETH/SOL) that, after real
+spread calibration, reaches a normalised net PnL of $0.0462$ (Sharpe
+$7.65$, max drawdown $-0.11\%$) by trading only the positive-funding,
+positive-basis subset.  \textbf{Strategy~4} shows that the na\"ive
+funding-rank cross-section \emph{loses} money on full PnL (Sharpe $-2.54$)
+and builds two delta-neutral trades instead: a scalable cross-exchange
+spread (Strategy~A, Sharpe $2.34$) and a negative cash-and-carry
+(Strategy~B, in-regime $7.47$, honestly de-risked to $\approx 3$ and capped
+at \$130{,}926).  Across all four, the common lesson is the same: funding
+carry is real but small, survives only when price risk and execution cost
+are accounted for honestly, and is bounded by capacity and regime rather
+than by signal quality.
 \end{abstract}
 
 
@@ -409,8 +412,194 @@ approaches can be benchmarked.
 
 
 %% =====================================================================
-\section{Strategy 2: A Cost-Aware Positive Funding-Basis Carry}
+\section{Strategy 2: A Dual-Engine Funding-plus-Momentum Long/Short Strategy}
 \label{sec:strat2}
+%% =====================================================================
+\begingroup\par\vspace{-2pt}%
+{\small\itshape Deng Xuying\ (Student ID: 3036555556)\quad
+ Liang Jiarui\ (Student ID: TBC)}\par\vspace{4pt}\endgroup
+
+This strategy asks whether funding-rate information can be systematically
+combined with technical trend signals.  Building on the CTREND framework,
+we develop a dual-engine architecture: a Funding-Rate (FR) engine that
+captures same-asset cross-venue funding dislocations across major
+exchanges, and a Technical-Momentum (TE) engine that serves as a
+regularised trend anchor.  The two are blended into a single cross-sectional
+CTREND score and traded as a weekly-rebalanced, dollar-neutral long/short
+book with bid--ask-adjusted execution and a data-driven fee model.  Over 53
+weeks (February 2025--March 2026) the strategy returns a cumulative
+$+48.2\%$ against an equal-weight market that fell $-66.3\%$, with an
+annualised Sharpe of $1.98$ and a maximum drawdown of $11.1\%$.
+
+\subsection{Model Architecture}
+
+The design assumes that trend persistence and funding dynamics capture
+different information.  The \emph{TE engine} follows CTREND with nine
+technical indicators (RSI, CCI, MACD-related measures, moving-average
+ratios, and Bollinger Band Width); each is converted into a
+cross-sectional forecast through a six-week Fama--MacBeth procedure, after
+which ElasticNet regularisation ($L_1$ ratio $=0.3$) selects the most
+informative predictors.  The \emph{FR engine} uses four inherently
+cross-sectional funding features---same-asset cross-venue funding rank
+(\texttt{fr\_sa\_cv}), funding spread (\texttt{fr\_xspread}), funding
+deviation (\texttt{fr\_xdev}), and funding z-score (\texttt{fr\_xz})---
+aggregated with an expanding-window information-coefficient weighting
+scheme.  Both signals are cross-sectionally standardised and combined as
+\begin{equation}
+  \text{CTREND} = 0.5\,Z_{\mathrm{TE}} + 0.5\,Z_{\mathrm{FR}},
+  \label{eq:ctrend}
+\end{equation}
+with the equal weighting as the baseline.  The composite is then smoothed
+with an eight-week rolling average to stabilise the cross-sectional
+rankings.
+
+\subsection{Data and Universe}
+
+The analysis uses the Auros resampled daily BBO dataset (with funding rates
+embedded) spanning February 2025 to March 2026, across six major exchanges
+and focusing on perpetual contracts with enough cross-exchange coverage to
+support same-asset cross-venue funding analysis
+(Table~\ref{tab:fm-data}).
+
+\begin{table}[htbp]
+  \centering
+  \caption{\textbf{Data coverage and trading universe.}}
+  \label{tab:fm-data}
+  \begin{tabular}{ll}
+    \toprule
+    \textbf{Metric} & \textbf{Value} \\
+    \midrule
+    Source            & Auros resampled daily BBO \\
+    Period            & 2025-02-28 $\rightarrow$ 2026-03-01 \\
+    Total assets      & 93 \\
+    Exchanges         & 6 (Binance, Bybit, Gate, \\
+                      & \quad Hyperliquid, KuCoin, OKX) \\
+    Cross-ex.\ symbols& 19 (listed on $\ge 2$ venues) \\
+    Weekly sections   & 53 (47 with CTREND signal) \\
+    Avg assets/week   & 82 (17 long / 17 short) \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\subsection{Portfolio Construction and Risk Controls}
+
+Each week, assets are ranked by their smoothed CTREND scores and a
+dollar-neutral book is formed by longing the top quintile (Q5) and
+shorting the bottom quintile (Q1), equally weighted within each leg.  A
+funding overlay then manages position sizes dynamically: long positions
+are scaled up as funding rises above predefined thresholds and short
+positions as funding falls increasingly negative.  A hard panic-exit
+forcibly liquidates positions when funding breaches extreme stress levels
+($\pm 0.1500\%$/day), providing protection against sudden funding-regime
+shifts.
+
+\subsection{Performance Evaluation}
+
+Over the full sample the strategy delivers a $47.1\%$ annualised return at
+$23.8\%$ volatility, a Sharpe of $1.98$, and a maximum drawdown of $11.1\%$
+(Table~\ref{tab:fm-perf}).  Out-of-sample performance stays positive
+($+0.8\%$) despite a far weaker market, suggesting the combined framework
+retains some effectiveness in a challenging regime.
+
+\begin{table*}[tp]
+  \centering
+  \caption{\textbf{Performance summary} (Funding-plus-Momentum CTREND book).}
+  \label{tab:fm-perf}
+  \begin{tabular}{lrrrr}
+    \toprule
+    \textbf{Metric} & \textbf{Full Period} & \textbf{In-Sample}
+      & \textbf{Out-of-Sample} & \textbf{Market (EW)} \\
+    \midrule
+    Cumulative Return     & $+48.2\%$ & $+47.0\%$ & $+0.8\%$  & $-66.3\%$ \\
+    Annualized Return     & $+47.1\%$ & $+77.3\%$ & $+2.4\%$  & $-66.3\%$ \\
+    Annualized Volatility & $23.8\%$  & $26.0\%$  & $18.5\%$  & --- \\
+    \textbf{Sharpe Ratio} & \textbf{1.976} & \textbf{2.969} & \textbf{0.128} & \textbf{$-$0.689} \\
+    Sortino Ratio         & 3.779     & ---       & ---       & --- \\
+    Maximum Drawdown      & $-11.1\%$ & $-11.1\%$ & $-9.9\%$  & --- \\
+    Win Rate (weekly)     & 49.06\%   & 45.71\%   & 55.56\%   & --- \\
+    Avg Weekly Turnover   & 50\%      & ---       & ---       & --- \\
+    \bottomrule
+  \end{tabular}
+\end{table*}
+
+The quintile breakdown (Table~\ref{tab:fm-quintile}) shows the model's
+ranking ability.  Because of the market-wide drawdown ($-66.3\%$), all five
+quintiles posted negative absolute returns, but the model still separated
+stronger from weaker assets: Q5 lost far less than Q1, an annualised
+Q5\,$-$\,Q1 spread of $+58.9\%$.
+
+\begin{table}[htbp]
+  \centering
+  \caption{\textbf{Quintile breakdown (Q1--Q5 spread).}}
+  \label{tab:fm-quintile}
+  \begin{tabular}{lrr}
+    \toprule
+    \textbf{Quintile} & \textbf{Ann.\ Return} & \textbf{Sharpe} \\
+    \midrule
+    Q1 (Shorts) & $-72.7\%$ & $-0.879$ \\
+    Q2          & $-46.2\%$ & $-0.517$ \\
+    Q3          & $-53.4\%$ & $-0.580$ \\
+    Q4          & $-32.1\%$ & $-0.191$ \\
+    Q5 (Longs)  & $-13.8\%$ & $-0.180$ \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\linewidth]{figures/ljr_fig1.png}
+  \caption{\textbf{Backtest results.}  Cumulative return, drawdown, return
+           distribution, universe breadth, and rolling Sharpe over the
+           53-week sample.  The strategy stays profitable while the
+           equal-weight benchmark declines.}
+  \label{fig:fm-backtest}
+\end{figure}
+
+Figure~\ref{fig:fm-backtest} shows the strategy remaining profitable
+through a prolonged benchmark decline; the drawdown profile is relatively
+stable with quick recoveries, and the return distribution is positively
+skewed.  The universe stays above ninety eligible instruments for most of
+the sample, so performance is not reliant on a small subset of assets.
+
+\subsection{Signal Attribution and Economic Interpretation}
+
+Decomposing cumulative returns into TE and FR contributions
+(Figure~\ref{fig:fm-attrib}) shows that both engines contribute positively
+but with different patterns.  The TE component earns from persistent
+cross-sectional price trends and performs well in sustained directional
+moves, whereas the FR component produces a smoother profile largely
+independent of price direction.  Economically, funding rates proxy trader
+positioning, sentiment imbalances, and temporary liquidity segmentation:
+when the trend-following logic struggled during the late-sample regime
+shift (Nov 2025--Feb 2026), the funding overlay kept capturing structural
+funding dislocations and offset part of the technical weakness.  The two
+families therefore capture distinct, complementary sources of alpha,
+reducing reliance on any single signal.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\linewidth]{figures/ljr_fig2a.png}\\[4pt]
+  \includegraphics[width=\linewidth]{figures/ljr_fig2b.png}
+  \caption{\textbf{Cumulative-return attribution: TE versus FR.}  Both
+           engines contribute positively; the FR contribution is smoother
+           and more independent of directional market moves.}
+  \label{fig:fm-attrib}
+\end{figure}
+
+\subsection{Limitations}
+
+Three caveats apply.  The 53-week sample limits statistical power and the
+scope for robustness testing across regimes.  The out-of-sample window
+coincided with a severe late-2025 bear-market shift in which the technical
+engine's predictive efficacy dropped---partly offset by the funding
+component, but a reminder of trend signals' sensitivity to abrupt
+reversals.  Finally, a true same-asset cross-venue book is operationally
+intensive: moving capital across six exchanges introduces latency and
+margin-fragmentation costs that a backtest cannot fully model.
+
+%% =====================================================================
+\section{Strategy 3: A Cost-Aware Positive Funding-Basis Carry}
+\label{sec:strat3}
 %% =====================================================================
 \partauthor{Liang Mengxuan}{3036551495}
 
@@ -774,8 +963,8 @@ that would require unmodelled spot borrowing.
 
 
 %% =====================================================================
-\section{Strategy 3: Cross-Exchange Spread Capture and Negative Cash-and-Carry}
-\label{sec:strat3}
+\section{Strategy 4: Cross-Exchange Spread Capture and Negative Cash-and-Carry}
+\label{sec:strat4}
 %% =====================================================================
 \partauthor{Cao Zhaoli}{3036668420}
 
@@ -2534,13 +2723,13 @@ only one source.
 \label{sec:conclusion}
 %% =====================================================================
 
-Taken together, the three strategies map the funding-rate arbitrage space
+Taken together, the four strategies map the funding-rate arbitrage space
 of Table~\ref{tab:taxonomy} and reach a consistent verdict.  The funding
 mechanism does anchor perpetual prices to spot, but only weakly: the
-direct convergence pull is small (Strategy~2 finds a same-sign basis
+direct convergence pull is small (Strategy~3 finds a same-sign basis
 convergence edge of barely one percentage point), and the carry it pays is
 modest once price risk and execution cost are charged honestly.  Naive
-harvesting fails---Strategy~3 shows a funding-rank cross-section losing
+harvesting fails---Strategy~4 shows a funding-rank cross-section losing
 $-2.54$ on full PnL---so every viable trade in this report is built around
 removing price risk rather than predicting it.
 
@@ -2550,16 +2739,21 @@ Each member exploits a different cell of the taxonomy.
 KAITO~\textsc{hype}--\textsc{okex}, with a deferred-decision rule timed
 three minutes before settlement; it earns an out-of-sample Sharpe of
 $2.35$ but its edge is thin and dies above $\sim 5$~bps of extra slippage.
-\emph{Strategy~2} (Liang Mengxuan) trades a positive funding-\emph{basis}
-carry on Binance majors, deliberately restricted to the long-spot /
-short-perpetual side so that no unmodelled spot borrowing is required; with
-real spread calibration it delivers a stable normalised net PnL of $0.0462$
-(Sharpe $7.65$, drawdown $-0.11\%$) and survives train--test and
-walk-forward checks.  \emph{Strategy~3} (Cao Zhaoli) trades the same-coin
-cross-venue funding spread at scale (Strategy~A, Sharpe $2.34$, any size)
-and a single-venue negative cash-and-carry (Strategy~B), whose headline
-in-regime $7.47$ is honestly deflated by capacity and regime to a
-long-run $\approx 3$ within $[2.41, 3.81]$ and a hard \$130{,}926 cap.
+\emph{Strategy~2} (Deng Xuying and Liang Jiarui) blends a funding-rate
+engine with a technical-momentum engine into a weekly, dollar-neutral
+CTREND long/short book; over a falling market ($-66.3\%$) it returns
+$+48.2\%$ at a Sharpe of $1.98$, with the funding overlay smoothing returns
+when the trend engine struggles.  \emph{Strategy~3} (Liang Mengxuan) trades
+a positive funding-\emph{basis} carry on Binance majors, deliberately
+restricted to the long-spot / short-perpetual side so that no unmodelled
+spot borrowing is required; with real spread calibration it delivers a
+stable normalised net PnL of $0.0462$ (Sharpe $7.65$, drawdown $-0.11\%$)
+and survives train--test and walk-forward checks.  \emph{Strategy~4} (Cao
+Zhaoli) trades the same-coin cross-venue funding spread at scale
+(Strategy~A, Sharpe $2.34$, any size) and a single-venue negative
+cash-and-carry (Strategy~B), whose headline in-regime $7.47$ is honestly
+deflated by capacity and regime to a long-run $\approx 3$ within
+$[2.41, 3.81]$ and a hard \$130{,}926 cap.
 
 Three lessons recur across all of our work.  First, accounting honesty
 dominates signal cleverness: a funding-only PnL can overstate the Sharpe by
@@ -2579,7 +2773,7 @@ carry.
 %% -- References -------------------------------------------------------
 {\small
 \bibliographystyle{IEEEtran}
-% Strategy 3 (Cao) citations
+% Strategy 4 (Cao) citations
 \nocite{ackerer2024perpetual}
 \nocite{makarov2020trading}
 \nocite{liu2022common}
@@ -2598,7 +2792,7 @@ carry.
 \nocite{brunnermeier2009market}
 \nocite{duffie2010presidential}
 \nocite{frazzini2014betting}
-% Strategy 2 (Liang Mengxuan) citations
+% Strategy 3 (Liang Mengxuan) citations
 \nocite{alexander2020bitmex}
 \nocite{baur2019pricediscovery}
 \nocite{binance2024funding}
