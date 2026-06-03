@@ -87,8 +87,13 @@ team member develops one strategy within it.  \textbf{Strategy~1} is a
 rule-based, deferred-decision cross-exchange capture on
 KAITO~(\textsc{hype}--\textsc{okex}) that earns an out-of-sample Sharpe of
 $2.35$ but is fragile to slippage and timing.  \textbf{Strategy~2} (SIM
-Warren Hong and Wu Zeliang) contributes a further funding-rate strategy,
-added separately below.  \textbf{Strategy~3} blends a
+Warren Hong and Wu Zeliang) pairs two same-asset cross-exchange
+implementations: a payment-aware funding carry that earns $+16.7\%$ gross
+but only $+1.8\%$ (Sharpe $0.25$) after a \$5k-per-leg execution stress,
+and a no-arbitrage-bound convergence trade whose raw Sharpe of $-6.48$
+isolates turnover cost---not forecasting---as the binding constraint and is
+repaired by a disciplined exit-plus-filter recipe.  \textbf{Strategy~3}
+blends a
 funding-rate engine with a technical-momentum engine into a weekly,
 dollar-neutral long/short CTREND book that returns $+48.2\%$ against a
 $-66.3\%$ market (Sharpe $1.98$).  \textbf{Strategy~4} is a cost-aware
@@ -98,8 +103,8 @@ $7.65$, max drawdown $-0.11\%$) by trading only the positive-funding,
 positive-basis subset.  \textbf{Strategy~5} shows that the na\"ive
 funding-rank cross-section \emph{loses} money on full PnL (Sharpe $-2.54$)
 and builds two delta-neutral trades instead: a scalable cross-exchange
-spread (Strategy~A, Sharpe $2.34$) and a negative cash-and-carry
-(Strategy~B, in-regime $7.47$, honestly de-risked to $\approx 3$ and capped
+spread (Strategy~5.1, Sharpe $2.34$) and a negative cash-and-carry
+(Strategy~5.2, in-regime $7.47$, honestly de-risked to $\approx 3$ and capped
 at \$130{,}926).  Across all five, the common lesson is the same: funding
 carry is real but small, survives only when price risk and execution cost
 are accounted for honestly, and is bounded by capacity and regime rather
@@ -627,15 +632,383 @@ which more sophisticated approaches can be benchmarked.
 
 
 %% =====================================================================
-\section{Strategy 2: [Title to be confirmed]}
+\section{Strategy 2: Same-Asset Cross-Exchange Funding Strategies}
 \label{sec:strat2}
 %% =====================================================================
 \begingroup\par\vspace{-2pt}%
 {\small\itshape SIM Warren Hong\ (Student ID: 3036555893)\quad
  Wu Zeliang\ (Student ID: 3036556823)}\par\vspace{4pt}\endgroup
 
-\emph{[This strategy will be added once the authors submit their text and
-figures.]}
+This part presents two complementary implementations of the same-asset,
+cross-exchange cell of the taxonomy in Table~\ref{tab:taxonomy}.
+\emph{Strategy~2.1} (Warren Sim Hong) is a payment-aware funding-carry trade
+with open-interest and flow confirmation; \emph{Strategy~2.2} (Wu Zeliang)
+trades the no-arbitrage-bound convergence residual under heterogeneous
+funding clocks.  Both reach the report's common verdict from different
+angles: the gross funding edge is real, but most of it is consumed by
+execution cost and cross-venue basis risk.
+
+\subsection{Payment-Aware Cross-Exchange Funding Carry with OI/Flow Confirmation (Strategy 2.1)}
+\begingroup\par\vspace{-2pt}%
+{\small\itshape Warren Sim Hong\ (Student ID: 3036555893)}\par\vspace{4pt}\endgroup
+
+This strategy studies the same-asset, cross-exchange cell of the funding-arbitrage taxonomy, but with a deliberately stricter question than the naive funding-spread trade. The question is not whether quoted funding rates differ across venues; they clearly do. The question is whether the funding spread is actually collectable after funding-payment timing, bid--ask spreads, taker fees, slippage, stale data, and short-horizon basis movement are included in the PnL.
+
+The final implementation is a payment-aware cross-exchange carry strategy. For each asset and decision timestamp, I identify the venue with the highest expected collectable funding and the venue with the lowest expected collectable funding. The strategy shorts the high-funding perpetual and longs the low-funding perpetual on the same asset. The trade is therefore intended to be market-neutral with respect to the coin's direction, although it still carries cross-venue basis and execution risk.
+
+\subsubsection{Motivation and Economic Hypothesis}
+
+The economic hypothesis is that extreme funding spreads reflect temporary imbalance in leveraged positioning across venues. If one venue has a crowded long book and another venue has weaker or opposite funding pressure, a same-asset long--short position can collect the funding differential while reducing outright market beta. However, this is not a risk-free arbitrage. Funding payments are discrete, exchange funding schedules differ, and the mark-to-market basis between venues can move more than the funding payment over short holding periods.
+
+Figure~\ref{fig:warren_strategy_overview} summarises the strategy logic. The strategy uses payment-aware expected funding capture as the core signal, then applies execution-cost and OI/flow checks before entering.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\linewidth]{figures/warren_strategy_high_level_overview_slide.png}
+    \caption{High-level strategy map. The trade is same-asset and cross-exchange: long the low expected-funding venue, short the high expected-funding venue, and require the expected capture to survive cost and quality filters.}
+    \label{fig:warren_strategy_overview}
+\end{figure}
+
+\subsubsection{Data and Signal Construction}
+
+The strategy uses event-level funding payments, derivative ticker data, point-in-time BBO quotes, order-book depth, open interest, taker imbalance, and volume. The key preprocessing step is to build a canonical funding-event table. This avoids double-counting pairs that appear in both the clean funding-rate file and the expanded derivative ticker file. For exchanges with explicit funding timestamps, a funding payment is inferred when the published next funding timestamp changes. Hyperliquid is handled separately because its ticker records zero funding timestamps while the venue pays hourly; the hourly schedule is reconstructed and checked against overlapping clean funding data.
+
+All strategy decisions are made from five-minute feature tables. The funding signal uses the currently visible funding rate as the expected rate because the expanded derivative ticker file did not provide a reliable non-zero predicted funding rate across the full universe. Open interest and taker imbalance are not used as an independent alpha model. They are used as a soft confirmation of whether the high-funding side still appears crowded enough for the funding spread to persist until payment.
+
+\subsubsection{Strategy Design}
+
+At each decision timestamp and for each asset, the algorithm ranks available venues by expected collectable funding over the upcoming payment horizon. It selects a candidate pair:
+
+\begin{itemize}
+    \item short leg: venue with the highest expected funding;
+    \item long leg: venue with the lowest expected funding;
+    \item hedge constraint: both legs must reference the same asset.
+\end{itemize}
+
+The entry rule is:
+
+\begin{equation}
+E[\text{funding capture}] - \text{OI/flow penalty}
+- 2.0 \times \text{round-trip cost} \geq 30\text{ bps}.
+\label{eq:warren_entry_rule}
+\end{equation}
+
+Here, expected funding capture is the expected funding received from the short high-funding leg minus the expected funding paid on the long low-funding leg. The calculation is payment-aware: it uses upcoming collectable funding events rather than simply comparing raw quoted rates. This matters because Hyperliquid pays hourly, while other venues can pay every two, four, or eight hours.
+
+Figure~\ref{fig:warren_trade_mechanics} illustrates the intended trade path. The strategy enters when the spread is wide, collects funding while the position is open, and exits once the spread compresses or a better pair appears.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\linewidth]{figures/warren_funding_trade_mechanics_example_clean.png}
+    \caption{Illustrative trade mechanics. The chart is synthetic, not a realised trade: enter when the high- and low-funding venues diverge, collect funding payments, and exit after compression.}
+    \label{fig:warren_trade_mechanics}
+\end{figure}
+
+\subsubsection{OI/Flow Penalty and Cost Model}
+
+The OI/flow signal is implemented as a soft penalty, not as a hard filter. If the high-funding venue has rising or stable open interest and taker flow consistent with persistent crowding, no penalty is applied. If OI/flow does not support the persistence of the funding spread, up to 15 bps is subtracted from the expected edge before applying Equation~\ref{eq:warren_entry_rule}. This keeps the signal economically interpretable: OI and flow do not create the trade; they reduce confidence when the funding spread looks less likely to persist.
+
+Round-trip cost includes point-in-time bid--ask spread, taker fees, and a slippage stress. Taker fees are set at 1.5 bps per fill. The slippage stress is reported separately because order-book depth is incomplete across venues. For the final reported capacity test, I use a 5,000 dollar notional per leg. Observed depth uses a depth-based slippage estimate capped at the visible depth boundary, while missing depth is charged 2 bps for the missing leg's full round trip.
+
+\subsubsection{Parameter Selection}
+
+The 30 bps entry threshold and the 15 bps OI/flow penalty were chosen from walk-forward sensitivity rather than from a final-curve optimisation. The entry threshold was compared against looser edge filters. A 20 bps filter admitted more trades but performed worse in later windows, while the 30 bps filter removed weaker trades and produced a more stable profile. The OI/flow penalty was tested over 0, 5, 10, 15, and 20 bps in late-2025 windows. Moderate penalties improved results, while excessive filtering started to reduce the opportunity set.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\linewidth]{figures/warren_parameter_selection_walk_forward_visual.png}
+    \caption{Walk-forward parameter sensitivity. The chosen cost buffer and OI/flow penalty are not treated as magic constants; they reflect a moderate region where filtering improves later-window robustness without eliminating the opportunity set.}
+    \label{fig:warren_parameter_selection}
+\end{figure}
+
+\subsubsection{Empirical Results}
+
+The pre-slippage backtest is profitable, but the result changes materially after adding a conservative capacity stress. Table~\ref{tab:warren_headline} reports the key diagnostics. Before additional slippage, the strategy earns 1,670.5 bps over 589 trades. After the 5,000 dollar per-leg slippage stress, the net result falls to 176.4 bps and the daily realised Sharpe falls to 0.25. This is the central finding: the gross funding edge exists, but execution consumes most of it.
+
+\begin{table}[t]
+    \centering
+    \caption{Headline performance of Strategy 2.1.}
+    \label{tab:warren_headline}
+    \begin{tabular}{lrr}
+        \toprule
+        Metric & Before slippage & After \$5k stress \\
+        \midrule
+        Trades & 589 & 589 \\
+        Total PnL (bps) & 1,670.5 & 176.4 \\
+        Total return & 16.7\% & 1.8\% \\
+        Daily realised Sharpe & 1.34 & 0.25 \\
+        Win rate & 41.6\% & 38.2\% \\
+        Average hold & 1.82 h & 1.82 h \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+Figure~\ref{fig:warren_equity_curve} shows the post-slippage equity curve. The realised curve is jagged because PnL is booked when trades close and because short-horizon basis moves can dominate funding receipts. The sharp late-sample V-shape is mainly a BERA/PIPPIN cluster: the drawdown came from adverse basis movement, while the recovery came from dense funding collections around 11--12 February 2026.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\linewidth]{figures/warren_strategy_5k_missing2bps_leg_equity_curve.png}
+    \caption{Post-slippage equity curve at 5,000 dollars per leg. The strategy remains slightly positive, but the path is uneven and basis-sensitive.}
+    \label{fig:warren_equity_curve}
+\end{figure}
+
+\subsubsection{PnL Attribution and Trade Diagnostics}
+
+The attribution in Table~\ref{tab:warren_attribution} is the most important diagnostic. Gross funding contributes 7,599.6 bps. Fees, spread, slippage, and basis risk absorb nearly all of this edge. Basis PnL is negative, which confirms that the strategy is not a free arbitrage: it is a funding-carry trade with residual cross-venue mark-to-market risk.
+
+\begin{table}[t]
+    \centering
+    \caption{PnL attribution after the 5,000 dollar slippage stress.}
+    \label{tab:warren_attribution}
+    \begin{tabular}{lr}
+        \toprule
+        Component & Contribution (bps) \\
+        \midrule
+        Gross funding PnL & 7,599.6 \\
+        Basis PnL & -2,395.1 \\
+        Taker fees & -3,534.0 \\
+        Slippage & -1,494.1 \\
+        \midrule
+        Net PnL & 176.4 \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\linewidth]{figures/warren_pnl_attribution_page_5k_missing2bps_leg.png}
+    \caption{PnL decomposition. Funding is the gross source of return, while fees, slippage, and basis movement are the main drags.}
+    \label{fig:warren_pnl_decomposition}
+\end{figure}
+
+Trade-level diagnostics support the same interpretation. Some large winners are mostly basis luck rather than pure carry. Other trades are closer to the intended thesis: funding receipts dominate and basis is a smaller drag. The audit table in Figure~\ref{fig:warren_trade_examples} is included to avoid overstating the result as mechanical arbitrage.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\linewidth]{figures/warren_trade_examples_audit_table.png}
+    \caption{Trade examples. Individual trades show why funding PnL must be separated from basis PnL before interpreting the edge.}
+    \label{fig:warren_trade_examples}
+\end{figure}
+
+\subsubsection{Capacity and Slippage Stress}
+
+Capacity is the binding practical question. Table~\ref{tab:warren_capacity} reports the same trade log under 1,000, 5,000, and 10,000 dollars per leg. At 1,000 dollars per leg, the strategy remains comfortably positive. At 5,000 dollars, it is still positive but marginal. At 10,000 dollars, the strategy turns negative under the same slippage rule. This suggests that the edge is execution-sensitive and probably belongs in a small-capacity or highly selective implementation unless better venue-specific depth is available.
+
+\begin{table}[t]
+    \centering
+    \caption{Capacity/slippage stress by notional per leg.}
+    \label{tab:warren_capacity}
+    \begin{tabular}{lrrr}
+        \toprule
+        Notional & Slippage (bps) & Net PnL (bps) & Sharpe \\
+        \midrule
+        \$1k & 857.1 & 813.5 & 1.13 \\
+        \$5k & 1,494.1 & 176.4 & 0.25 \\
+        \$10k & 2,079.4 & -408.9 & -0.57 \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\linewidth]{figures/warren_capacity_slippage_1k_5k_10k_final.png}
+    \caption{Capacity stress. Increasing per-leg notional quickly consumes the funding edge because many trades rely on incomplete or shallow depth.}
+    \label{fig:warren_capacity}
+\end{figure}
+
+\subsubsection{Limitations and Implementation Considerations}
+
+The strategy has three main limitations. First, the final post-slippage Sharpe is low, so the result is better interpreted as a positive but fragile edge than as a deployable high-Sharpe strategy. Second, the book is same-asset long/short but not risk-free: cross-venue basis moves can dominate short holding periods. Third, order-book depth is incomplete, so capacity estimates depend on a proxy slippage model rather than a full execution simulator.
+
+The strongest version of the strategy would require tighter live execution modelling: venue-specific depth at both entry and exit, rejection or haircut of BBO-only venues, and a live capacity limit by asset and venue. It would also need monitoring for stale funding timestamps, BBO quality, sudden interval changes, and concentration in small assets. Overall, Strategy 2.1 supports the report's broader conclusion: funding carry is real, but only a small part of it survives realistic frictions.
+
+\subsection{A No-Arbitrage-Bound Cross-Venue Convergence Trade with Asymmetric Funding Clocks (Strategy 2.2)}
+\begingroup\par\vspace{-2pt}%
+{\small\itshape Wu Zeliang\ (Student ID: 3036556823)}\par\vspace{4pt}\endgroup
+
+This strategy occupies the \emph{same-asset, cross-exchange} cell of Table~\ref{tab:taxonomy}, alongside Strategy~1 and Strategy~5.1, but forms its signal differently. Rather than trading the raw funding spread, it trades the \emph{no-arbitrage-bound residual} implied by the perpetual-pricing theory of He, Manela, Ross and von Wachter~\cite{he2022perpetual}, generalised to two \emph{heterogeneous} funding clocks. The honest headline up front---consistent with the rest of this report---is that the signal is economically motivated, but after realistic costs the raw strategy \emph{loses} money (equal-weight Sharpe $-6.48$), and a Perfect-Direction oracle that is handed next hour's realised sign \emph{also} loses heavily, which proves that the binding constraint is turnover-driven cost rather than forecasting skill. The contribution is therefore threefold: (i) a per-pair cost-drag diagnosis; (ii) a disciplined turnover-reduction recipe---a partial-overshoot exit combined with a walk-forward pre-trade pair filter; and (iii) a leakage-safe validation stack---walk-forward, nested cross-validation, Combinatorial Purged Cross-Validation (CPCV) with purge and embargo, a paired Newey--West test, and the deflated Sharpe ratio---which shows the recipe \emph{helps} robustly (the paired edge is significant in $10/10$ clean folds) even though the out-of-sample Sharpe \emph{level} is not bankable on this short calendar.
+
+\subsubsection{Theory: the asymmetric-$\kappa$ no-arbitrage band}
+
+Following Eq.~(8) of \cite{he2022perpetual} with two heterogeneous funding clocks and a shared reference index $I_t$, the discounted convergence P\&L of a long-$A$/short-$B$ perpetual pair is
+\begin{equation}
+\begin{aligned}
+\Pi_t = {}& -e^{-rt}\!\left(F^A_t-F^B_t\right) + \left(F^A_0-F^B_0\right)\\
+          & + \!\int_0^t\! e^{-rs}\!\left[\kappa^A\!\left(F^A_s-I^A_s\right)-\kappa^B\!\left(F^B_s-I^B_s\right)\right]\!ds,
+\end{aligned}
+\end{equation}
+where $\kappa^A$ and $\kappa^B$ are \emph{venue-specific convergence intensities}---the funding clocks that govern how fast each perpetual reverts to its index---and are distinct from the realised funding payments, which enter the P\&L separately. We deliberately do \emph{not} assume $\kappa^A=\kappa^B$ and do not collapse the pair to a $\min$ or $\mathrm{mean}$ clock. Define the asymmetric residual
+\begin{equation}
+\rho^{AB}_t \;\equiv\; \kappa^A\,\log\!\frac{F^A_t}{I_t}\;-\;\kappa^B\,\log\!\frac{F^B_t}{I_t},
+\end{equation}
+with $I_t$ the per-asset cross-venue median price (excluding $A,B$ when at least two other venues quote, else the geometric mean of $F^A,F^B$). When $\kappa^A=\kappa^B$ and $I_t=\sqrt{F^A_tF^B_t}$ this reduces to the familiar symmetric log-spread $\bar\kappa\,(\log F^A-\log F^B)$; when the clocks differ, the residual term $(\kappa^A-\kappa^B)\log I_t$ is preserved with its correct sign instead of being discarded. The no-trade band is derived per-leg from the round-trip cost on each leg ($c^A,c^B$ per leg):
+\begin{equation}
+\begin{aligned}
+\rho^{AB}_{\ell} &= \kappa^A\log(1-2c^A) - \kappa^B\log(1+2c^B),\\
+\rho^{AB}_{u}    &= \kappa^A\log(1+2c^A) - \kappa^B\log(1-2c^B).
+\end{aligned}
+\end{equation}
+Figure~\ref{fig:rma_geometry} shows the resulting trade geometry: entries fire when $\rho$ crosses a band edge and the baseline exit is the first zero-crossing, implemented by a three-state position machine.
+
+\begin{figure*}[t]
+  \centering
+  \includegraphics[width=0.92\textwidth]{figures/rma_fig01_signal_geometry.png}
+  \caption{\textbf{Trading-signal geometry (asymmetric $\kappa$).} Left: the asymmetric residual $\rho^{AB}_t$ against the constant no-arb band $[\rho^{AB}_\ell,\rho^{AB}_u]$; the shaded interior is the no-trade region. Entries fire on a band crossing, the baseline exit is the zero-crossing. Right: the three-state machine the rules implement. The path shown is a synthetic mean-reverting process used only to expose the geometry.}
+  \label{fig:rma_geometry}
+\end{figure*}
+
+\subsubsection{Data and pair universe}
+
+The strategy uses the shared project dataset described in Strategy~1 (Table~\ref{tab:s1-coverage}): minute-level BBO quotes, funding-rate history, and instrument specifications for the five tokens AVAX, BERA, BTC, KAITO and PIPPIN across six venues, spanning 1~March 2025--28~February 2026, with Hyperliquid funding aggregated to the common 8-hour bucket. Each pair is carried on two clocks: an \emph{hourly} clock that forms the signal from fresh top-of-book observations, and a \emph{minute} clock that handles execution, cost accounting and mark-to-market. Screening every cross-venue combination yields $60$ pair bundles (BERA~$15$, KAITO~$14$, BTC~$14$, AVAX~$14$, PIPPIN~$3$); the headline configuration's minimum-observation and coverage gates leave $40$ eligible pairs. Because Bybit (\texttt{byde}) coverage ends in mid-2025, the cross-sectional diagnostics include it through its window, but the out-of-sample validation period (from September~2025) falls after it expires, so the validated book is effectively five-venue.
+
+\subsubsection{Baseline strategy design and execution integrity}
+
+The baseline enters long ($+1$) when $\rho<\rho_\ell$ and short ($-1$) when $\rho>\rho_u$, and exits at the first zero-crossing (a long exits at $\rho\ge0$, a short at $\rho\le0$). The hourly desired-position state is executed one bar later on the minute clock, which charges a single $1.5$~bp fee per leg, top-of-book execution, the realised cross-venue spread, and funding, and then marks the book to market. The engine is leakage-safe by construction: every execution-integrity audit---no price P\&L booked on the initial bar, no trades on stale, obsolete, or same-minute signals, and strict observe-before-act lag rules---returns \emph{zero} failures across all seven categories and every backtested frame, so the performance below is not an artefact of look-ahead.
+
+\subsubsection{Baseline empirical results}
+
+Aggregated equal-weight across the $40$ eligible pairs, the baseline \emph{loses} money after costs: Sharpe $-6.48$, annualised return $-20.05\%$, annualised volatility $3.09\%$, and a maximum drawdown of $-16.48\%$ (Table~\ref{tab:rma_baseline}, Figure~\ref{fig:rma_baseline}). The loss is steady rather than event-driven---the drawdown grinds monotonically lower---and the cross-section is broadly weak: the median pair Sharpe is $-1.04$ and the median pair maximum drawdown is $-14.29\%$. This is the cost of forming the signal correctly but acting on every band crossing.
+
+\begin{table}[t]
+  \centering
+  \caption{\textbf{Baseline equal-weight portfolio} (top-of-book, $1.5$~bp/leg).}
+  \label{tab:rma_baseline}
+  \begin{tabular}{lr}
+    \toprule
+    Metric & Value \\
+    \midrule
+    Eligible pairs            & $40$ of $60$ \\
+    Sharpe ratio              & $-6.48$ \\
+    Annualised return         & $-20.05\%$ \\
+    Annualised volatility     & $3.09\%$ \\
+    Maximum drawdown          & $-16.48\%$ \\
+    Median pair Sharpe        & $-1.04$ \\
+    Median pair max drawdown  & $-14.29\%$ \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\columnwidth]{figures/rma_fig02_baseline_equity.png}
+  \caption{\textbf{Baseline portfolio equity and drawdown.} Cumulative P\&L (top) and drawdown (bottom) of the equal-weight eligible-pair book. The signal is theory-grounded, but acting on every crossing bleeds steadily to a Sharpe of $-6.48$.}
+  \label{fig:rma_baseline}
+\end{figure}
+
+\subsubsection{Cost-drag diagnosis}
+
+Why does a correct signal lose? Decomposing each pair's full-sample P\&L into price, funding, spread, fee and impact components (Figure~\ref{fig:rma_decomp}) isolates the mechanism: the worst pairs are not short of gross edge---their price-plus-funding stack is often sizeable---but their cost stack (spread $+$ fee, driven by turnover) is larger still, so the net total (black diamond) sits deep in the red. Equivalently, every losing pair has a cost-to-gross ratio above one. The contrast at the single-pair level (Figure~\ref{fig:rma_pairdiag}) is the clearest statement of the problem: the best pair (BTC \textsc{hype}/\textsc{okex}, Sharpe $+1.33$) trades sparsely and lets gross edge clear cost, whereas the worst pair (BERA \textsc{gate}/\textsc{hype}, Sharpe $-4.56$, drawdown $-71\%$) churns almost continuously on the minute clock, and that turnover---not an adverse signal---is what destroys it. The implication is directional: the fix is to \emph{trade less}, not to forecast better.
+
+\begin{figure*}[t]
+  \centering
+  \includegraphics[width=0.86\textwidth]{figures/rma_fig03_pnl_decomposition.png}
+  \caption{\textbf{Pair P\&L decomposition, top and bottom Sharpe pairs.} Stacked price, funding, spread, fee and impact components as a share of notional; the black diamond is the net total. Losers carry ample gross edge but a larger cost stack---a turnover problem, not a signal problem.}
+  \label{fig:rma_decomp}
+\end{figure*}
+
+\begin{figure*}[t]
+  \centering
+  \begin{minipage}[t]{0.49\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{figures/rma_fig04_best_pair.png}
+  \end{minipage}\hfill
+  \begin{minipage}[t]{0.49\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{figures/rma_fig05_worst_pair.png}
+  \end{minipage}
+  \caption{\textbf{Best versus worst pair diagnostics.} Each panel shows cumulative P\&L attribution, drawdown, the hourly signal against the no-arb band, and the minute-executed position. Left---best pair (BTC \textsc{hype}/\textsc{okex}, Sharpe $+1.33$): sparse positioning, gross edge clears cost. Right---worst pair (BERA \textsc{gate}/\textsc{hype}, Sharpe $-4.56$): near-continuous position flipping, cost overwhelms gross edge. (Note the differing $\rho$ scales between the two signal panels.)}
+  \label{fig:rma_pairdiag}
+\end{figure*}
+\FloatBarrier
+
+\subsubsection{An oracle upper bound: it is a cost problem, not a forecasting one}
+
+To confirm that the binding constraint is cost rather than direction, we run a \emph{Perfect-Direction oracle}: at every hourly timestamp it is handed the next hour's realised gross spread return and chooses long, short or flat optimally, after which the same execution engine applies all path-dependent costs. If forecasting were the bottleneck, perfect foresight would rescue the book. It does not (Figure~\ref{fig:rma_oracle}): on the headline universe the oracle returns $-359\%$ cumulatively versus the baseline's $-16\%$, because perfect direction \emph{trades every hour} and therefore pays the maximum possible spread and fee. A non-tradable strategy that cannot be beaten on signal still loses by an order of magnitude more---direct evidence that the cost structure, driven by turnover, is the object worth attacking.
+
+\begin{figure*}[t]
+  \centering
+  \includegraphics[width=0.86\textwidth]{figures/rma_fig06_oracle.png}
+  \caption{\textbf{Perfect-Direction oracle versus baseline.} Equal-weight cumulative P\&L (top) and drawdown (bottom). Perfect hourly foresight loses far \emph{more} than the baseline because it trades every bar: the constraint is execution cost at the implied turnover, not signal quality.}
+  \label{fig:rma_oracle}
+\end{figure*}
+\FloatBarrier
+
+\subsubsection{Disciplined exit rules}
+
+If turnover is the enemy, the first lever is to leave positions later than the first zero-crossing. This is not free: holding past zero stops betting on convergence and starts betting on overshoot, trading churn for adverse exposure. We therefore sweep four disciplined families, each of which reproduces the baseline at its neutral parameter: \emph{overshoot} ($\beta$: a long closes at $\rho\ge\beta\rho_u$, with $\beta{=}0$ the baseline and $\beta{=}1$ holding to the opposite band), \emph{confirmed-zero} ($k$ consecutive bars beyond zero), \emph{cooldown} ($c$ bars blocking re-entry), and \emph{wider entry} ($m\times$ the band). Aggregated across the BTC cross-section (Table~\ref{tab:rma_variants}), every low-turnover family cuts entries and cost, and most lift mean Sharpe---but cost reduction always pairs with a gross-edge give-back. Reading net Sharpe jointly with robustness, the \emph{partial overshoot} $\beta\approx0.5$ is the sweet spot: it removes roughly half the round-trips while keeping most of the gross edge, lifting the majority of pairs. Cooldown barely moves anything (immediate re-entry is not the dominant churn source); confirmed-zero is a milder overshoot; and the large mean-$\Delta$Sharpe of wide entry ($m{=}3$) is misleading---it is achieved largely by going flat, destroying gross edge. We carry $\beta=0.5$ forward. Crucially, lower turnover lifts the worst pairs from clearly negative toward break-even but does \emph{not} manufacture edge; pairs whose gross edge is a small fraction of their cost stay marginal, which motivates a pre-trade filter.
+
+\begin{table}[t]
+  \centering
+  \caption{\textbf{Exit-rule families: mean $\Delta$Sharpe versus baseline} (BTC cross-section; ``improved'' counts pairs with $\Delta\mathrm{SR}>0$ of $60$). The neutral parameter of each family reproduces the baseline.}
+  \label{tab:rma_variants}
+  \begin{tabular}{llrr}
+    \toprule
+    Family & Param & mean $\Delta$SR & improved \\
+    \midrule
+    Overshoot $\beta$      & $0.25$ & $+0.74$ & $56/60$ \\
+    Overshoot $\beta$      & $0.50$ & $+1.21$ & $56/60$ \\
+    Overshoot $\beta$      & $1.00$ & $+1.66$ & $56/60$ \\
+    Confirmed-zero $k$     & $2$    & $+1.09$ & $57/60$ \\
+    Confirmed-zero $k$     & $3$    & $+1.41$ & $57/60$ \\
+    Confirmed-zero $k$     & $6$    & $+1.75$ & $55/60$ \\
+    Cooldown $c$           & $3$    & $+0.13$ & $38/60$ \\
+    Cooldown $c$           & $6$    & $+0.26$ & $34/60$ \\
+    Cooldown $c$           & $12$   & $+0.45$ & $42/60$ \\
+    Wider entry $m$        & $1.5$  & $+1.03$ & $53/60$ \\
+    Wider entry $m$        & $2.0$  & $+1.47$ & $52/60$ \\
+    Wider entry $m$        & $3.0$  & $+1.74$ & $46/60$ \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\begin{figure*}[t]
+  \centering
+  \includegraphics[width=0.96\textwidth]{figures/rma_fig07_exit_variants.png}
+  \caption{\textbf{Exit-rule comparison.} Left: mean $\Delta$Sharpe versus baseline by family and parameter. Right: turnover reduction against net-return change---every family buys lower cost with some convergence give-back. Partial overshoot $\beta\approx0.5$ is the robust net winner.}
+  \label{fig:rma_variants}
+\end{figure*}
+\FloatBarrier
+
+\subsubsection{Pre-trade pair filter and no-look-ahead validation}
+
+The higher-leverage fix is to \emph{not trade} pairs whose gross edge does not clear their cost. We implement this as a true walk-forward filter on the same monthly in-sample$\rightarrow$out-of-sample scaffold the report uses: for each out-of-sample month $m$, features are computed only on the trailing window $[m-W,\,m)$, the gate $\mathrm{gross\_ann}/|\mathrm{cost\_ann}|\ge R_{\min}$ is applied, and the survivors are traded equal-weight in month $m$. No realised out-of-sample information enters the selection. The filter and the exit rule address different parts of the same problem and stack (Figure~\ref{fig:rma_walkforward}): under both exit rules the filter turns a deeply negative book positive, and the best out-of-sample portfolio is overshoot $\beta=0.5$ \emph{and} the filter (Sharpe $0.26\rightarrow0.35$ as the exit rule is added, versus $-4.38$ for the unfiltered baseline).
+
+Because $\beta$, $R_{\min}$ and the lookback $W$ are all hyperparameters, we select them honestly. A nested train/validation/test split chooses $(W,\beta,R_{\min})$ on validation months and evaluates \emph{once} on a disjoint later block; the locked recipe lifts the test Sharpe from $-20.55$ to $-1.88$ with a paired daily Newey--West $t=+4.12$ ($p<0.01$) on identical days. We then replace the single split with CPCV: the out-of-sample months are partitioned into folds, each fold is held out in turn, validation months whose feature/label spans overlap the test fold are \emph{purged}, and an embargo drops months adjacent to the test block. The disciplined run shrinks the search to the two complementary knobs ($\beta,R_{\min}$, $16$ configs) and reports, per fold, the paired Newey--West $t$ and the deflated Sharpe (Figure~\ref{fig:rma_cpcv}, Table~\ref{tab:rma_validation}). The verdict is sharp and honest: the chosen recipe beats the baseline in \emph{every} clean fold ($10/10$, $p<0.05$), with per-fold paired $t$-statistics clustered well above $+1.96$; but the chosen book's \emph{absolute} test Sharpe swings from strongly positive to negative across folds, and the per-fold deflated $P(\mathrm{SR}>0)$ is correspondingly bimodal. The recipe \emph{helps} robustly; the Sharpe \emph{level} is not established by this sample.
+
+\begin{figure*}[t]
+  \centering
+  \includegraphics[width=0.86\textwidth]{figures/rma_fig08_walkforward.png}
+  \caption{\textbf{Walk-forward out-of-sample equity: exit rule $\times$ pre-trade filter.} The filter lifts both exit rules from negative to positive out of sample, and stacks with the overshoot exit. Features come only from the prior window, so this is not the ``select on realised Sharpe'' trap.}
+  \label{fig:rma_walkforward}
+\end{figure*}
+
+\begin{table*}[t]
+  \centering
+  \small
+  \caption{\textbf{No-look-ahead validation of the chosen recipe} (overshoot $\beta{=}0.5$ $+$ pre-trade pair filter).}
+  \label{tab:rma_validation}
+  \begin{tabular}{llll}
+    \toprule
+    Test & Baseline & Chosen recipe & Statistic / verdict \\
+    \midrule
+    Walk-forward OOS Sharpe (unfilt.\ $\to$ filt.) & $-4.38 \to 0.26$ & $-1.82 \to 0.35$ & filter lifts both exit rules \\
+    Nested-CV test Sharpe ($95\%$ CI) & $-20.55\,[{-}33.1,{-}12.2]$ & $-1.88\,[{-}6.1,{+}3.9]$ & paired daily NW $t=+4.12$ ($p<0.01$) \\
+    CPCV per-fold paired edge & --- & $>0$ in $10/10$ folds & NW $t$ up to $+15$ \\
+    \bottomrule
+  \end{tabular}
+\end{table*}
+
+\begin{figure*}[t]
+  \centering
+  \includegraphics[width=0.96\textwidth]{figures/rma_fig09_cpcv.png}
+  \caption{\textbf{Disciplined CPCV result.} Left: per-fold significance of the recipe's edge---the paired daily Newey--West $t$ of (chosen $-$ baseline) clears $+1.96$ in all ten clean folds. Right: per-fold out-of-sample Sharpe; the chosen book's median sits above the baseline but the spread is wide, so the \emph{direction} is bankable while the \emph{level} is not.}
+  \label{fig:rma_cpcv}
+\end{figure*}
+\FloatBarrier
+
+\subsubsection{Economic interpretation and limitations}
+
+The economics are the same as elsewhere in this report. The no-arb-bound residual is a real convergence signal---when one venue's perpetual drifts above its asymmetric-$\kappa$ fair value relative to another's, capital that can simultaneously post margin on both venues is paid to push them back together---but the edge per crossing is thin and the slow-moving-capital friction that keeps the gap open is exactly what makes over-trading it ruinous. Honest accounting (the Perfect-Direction oracle) shows the constraint is turnover-cost, not direction; the durable improvement comes from delta-neutral discipline (overshoot exit $+$ pre-trade filter), not from a better forecast; and what ultimately bounds the result is neither signal nor capacity but \emph{calendar budget}. With only six out-of-sample months, purging at the full lookback erases nearly every validation month, forcing $W$ down to one month on feasibility grounds alone---a blunt statement that this sample cannot support purged cross-validation at a longer lookback. Two-month folds also share calendar time, so the CPCV distribution is a sensitivity analysis, not i.i.d.\ replication, and a causal-EMA smoothing screen (a fourth knob, redundant with overshoot) is left out for the same data-budget reason. The recipe and its leakage-safe validation are ready; what they need before any level of Sharpe can be trusted is more history, not more parameters.
 
 
 %% =====================================================================
@@ -647,8 +1020,9 @@ figures.]}
  Liang Jiarui\ (Student ID: 3036549789)}\par\vspace{4pt}\endgroup
 
 This strategy asks whether funding-rate information can be systematically
-combined with technical trend signals.  Building on the CTREND framework,
-we develop a dual-engine architecture: a Funding-Rate (FR) engine that
+combined with technical trend signals.  Building on the CTREND
+framework~\cite{fieberg2025trend}, we develop a dual-engine architecture: a
+Funding-Rate (FR) engine that
 captures same-asset cross-venue funding dislocations across major
 exchanges, and a Technical-Momentum (TE) engine that serves as a
 regularised trend anchor.  The two are blended into a single cross-sectional
@@ -1202,8 +1576,8 @@ over one year.  The na\"ive idea---rank coins by funding and trade the
 extremes---looks like free money but loses money (full-PnL Sharpe $-2.54$)
 once every leg's price risk is counted; many refinements, including a
 machine-learning model, all fail out of sample.  Two delta-neutral
-strategies survive: \textbf{Strategy~A} (same coin, two venues) reaches an
-out-of-sample Sharpe of $2.34$ at any size, while \textbf{Strategy~B}
+strategies survive: \textbf{Strategy~5.1} (same coin, two venues) reaches an
+out-of-sample Sharpe of $2.34$ at any size, while \textbf{Strategy~5.2}
 (negative cash-and-carry) reaches $7.47$ in regime but is dormant $78\%$
 of the time and capped at \$130{,}926, which an honest risk pipeline cuts
 to a single-year range of $[2.41, 3.81]$.  The remainder of this section
@@ -1248,10 +1622,10 @@ price term is already removed in another way.
 
 Define the basis $b_t = (P_t - I_t)/I_t$.  Two facts are useful.  The same-coin
 same-venue basis (a perp against its own spot) is small and mean-reverts, so a
-single-venue hedge is clean---this is the base of Strategy~B.  The same-coin
+single-venue hedge is clean---this is the base of Strategy~5.2.  The same-coin
 cross-venue basiis (one exchange's perp against another's) is larger and slower,
 because to close it I need capital on two venus at the same time
-\cite{makarov2020trading}---this is the base of Strategy~A.
+\cite{makarov2020trading}---this is the base of Strategy~5.1.
 
 \subsubsection{Carry, dispersion and the cross-section}
 
@@ -1278,7 +1652,7 @@ not a free profit.
 \subsubsection{How this paper relates to prior work}
 
 Most crypto-arbitrage papers study the \emph{price} gap across venues
-\cite{makarov2020trading}.  Strategy~A moves this idea to the \emph{funding} basis: I
+\cite{makarov2020trading}.  Strategy~5.1 moves this idea to the \emph{funding} basis: I
 trade the slow and lasting cross-venue funding difference, not thhe fast price gap.  So
 the contribution of this paper is not a new anomaly, but a careful, friction-aware
 build and de-risk of two usable strategies, with an honest count of how much edge is
@@ -1387,21 +1761,21 @@ First I look at teh funding data, because its shape decides which strategies can
 \subsubsection{The shape of funding}
 
 Figure~\ref{fig:funddist} shows a sharp peak at zero and a heavy negative taail, so a
-few coins carry most of the money---this is where Strategy~B lives.
+few coins carry most of the money---this is where Strategy~5.2 lives.
 
 \begin{figure}[htbp]
   \centering
   \includegraphics[width=\linewidth]{figures/eda_funding_dist.png}
   \caption{\textbf{Distribution of funding rates.}  Pooled across all 118 pairs
            (clipped to $\pm$30~bp, log count axis).  A sharp zero-peak with a
-           heavy negative tail---the negative tail is where Strategy~B lives.}
+           heavy negative tail---the negative tail is where Strategy~5.2 lives.}
   \label{fig:funddist}
 \end{figure}
 
 Table~\ref{tab:fundcoin} splits this by coin.  The large caps have small positive
 funding and no carry; the mid-caps and meme coins (BERA, KAIITO, IP, MOODENG) stay
 deeply negative adn pay a long a large yearly subsidy.  This is the reason for
-Strategy~B.
+Strategy~5.2.
 
 \begin{table}[htbp]
   \centering
@@ -1436,7 +1810,7 @@ Strategy~B.
 \subsubsection{Funding differs across venues}
 
 Funding also differs across venues for the same coin, and this is the raw material of
-Strategy~A.  In Table~\ref{tab:fundexch} OKX is special (mean $+3.59$~bp, spread
+Strategy~5.1.  In Table~\ref{tab:fundexch} OKX is special (mean $+3.59$~bp, spread
 $24.6$~bp), while KuCoin is negative for mre than half the time.
 
 \begin{table}[htbp]
@@ -1466,7 +1840,7 @@ gap closes only slowly \cite{makarov2020trading}.
   \includegraphics[width=\linewidth]{figures/eda_funding_heatmap.png}
   \caption{\textbf{Annualised funding by coin $\times$ exchange.}  Coins differ
            (rows) and venues differ (columns); the within-row variation is the
-           spread Strategy~A trades.}
+           spread Strategy~5.1 trades.}
   \label{fig:heatmap}
 \end{figure}
 
@@ -1515,7 +1889,7 @@ LightGBM).
 
 \subsubsection{The cross-exchange spread is large and frequent}
 
-Strategy~A trades the cross-exchange funding spread $g$.  Its median is $8.8$~bp and
+Strategy~5.1 trades the cross-exchange funding spread $g$.  Its median is $8.8$~bp and
 its 99th percentile is $15.9$~bp (Table~\ref{tab:spread}), both well above the $3$~bp
 entry threshold, so it fires often; it also widens in stress
 (Figure~\ref{fig:spread}).
@@ -1537,7 +1911,7 @@ entry threshold, so it fires often; it also widens in stress
   \centering
   \includegraphics[width=\linewidth]{figures/eda_xex_spread.png}
   \caption{\textbf{Cross-exchange funding spread over time (7-day MA).}  The
-           spread stays above Strategy~A's 3~bp entry threshold and widens in
+           spread stays above Strategy~5.1's 3~bp entry threshold and widens in
            stressed periods.}
   \label{fig:spread}
 \end{figure}
@@ -1545,13 +1919,13 @@ entry threshold, so it fires often; it also widens in stress
 \begin{figure}[htbp]
   \centering
   \includegraphics[width=\linewidth]{figures/eda_neg_share.png}
-  \caption{\textbf{Share of negative funding by coin.}  Strategy~B's five coins
+  \caption{\textbf{Share of negative funding by coin.}  Strategy~5.2's five coins
            (red) are negative far more often than the majors, so the
            cash-and-carry edge lives in the mid-cap/meme group.}
   \label{fig:negshare}
 \end{figure}
 
-Figure~\ref{fig:negshare} confirms the coin choice: Strategy~B's five coins is
+Figure~\ref{fig:negshare} confirms the coin choice: Strategy~5.2's five coins is
 negative most often.
 
 \subsubsection{Funding paths through time}
@@ -1571,8 +1945,8 @@ constant---this is the root of the regime risk in Section~\ref{sec:risk}.
 
 \subsubsection{Liquidity: open interest}
 
-Depth differs by orders of magnitude (Figure~\ref{fig:oi}).  This is why Strategy~A
-uses only the eight most liquid coins, and why Strategy~B's thin mid-caps make its
+Depth differs by orders of magnitude (Figure~\ref{fig:oi}).  This is why Strategy~5.1
+uses only the eight most liquid coins, and why Strategy~5.2's thin mid-caps make its
 size only tens of thousands of dollars.
 
 \begin{figure}[htbp]
@@ -1588,7 +1962,7 @@ size only tens of thousands of dollars.
 
 Over all pairs, the mark-minus-index basis has mean, $-5.3$~bp and standard deviation
 $13.7$~bp (Figure~\ref{fig:basis}); this spread makes the basis tradeable, and its
-mean reversion is the second engine of Strategy~A.
+mean reversion is the second engine of Strategy~5.1.
 
 \begin{figure}[htbp]
   \centering
@@ -1618,7 +1992,7 @@ to the cross-sectional and regime variation, so I do not use it.
 Figure~\ref{fig:halflife} compares two things.  The fundng spread lasts (lag-1
 $0.57$, half-life about $5$~h), so I can catch it on a 4-hour grid.  The price basis
 reverts almost at once (lag-1 $-0.04$, half-life under $15$~min), so to trade the
-cross-exchange \emph{price} gap direcctly is hopeless.  So Strategy~A trades the lasting
+cross-exchange \emph{price} gap direcctly is hopeless.  So Strategy~5.1 trades the lasting
 funding spread, not the price gap.
 
 \begin{figure}[htbp]
@@ -1627,7 +2001,7 @@ funding spread, not the price gap.
   \caption{\textbf{Persistence: funding spread versus price basis.}  The funding
            spread reverts slowly (half-life $\approx 5$~h, tradeable); the price
            basis reverts almost at once (half-life $<15$~min, untradeable).
-           Strategy~A trades the funding spread.}
+           Strategy~5.1 trades the funding spread.}
   \label{fig:halflife}
 \end{figure}
 
@@ -1685,7 +2059,7 @@ only, it feell to $1.82$.  So the gaap was pure look-ahead.
 I tested fifteen more ideas (Table~\ref{tab:coldlist}): threshold tiers, gap sizing,
 an AR(1) predictor, toxic-move and crowing filters
 \cite{foucault2017toxic, hu2023crypto}, sign rules, top-$K$, persistence gates, and
-volatility swaps.  None of them clearly beat the Strategy~A baseline out of sample.  So
+volatility swaps.  None of them clearly beat the Strategy~5.1 baseline out of sample.  So
 the edge is in the structure, not in the add-ons.
 
 \begin{table}[htbp]
@@ -1718,7 +2092,7 @@ the edge is in the structure, not in the add-ons.
 \subsubsection{Positive cash-and-carry}
 
 The opposite positive cash-and-carry had an OOS Sharpe of $-1.15$: in this, sample only
-the negative-funding side paid, and this side became Strategy~B.
+the negative-funding side paid, and this side became Strategy~5.2.
 Figure~\ref{fig:rejected} shows that none of the rejected curves pulls away.
 
 \begin{figure}[htbp]
@@ -1726,19 +2100,19 @@ Figure~\ref{fig:rejected} shows that none of the rejected curves pulls away.
   \includegraphics[width=\linewidth]{figures/final_02_rejected.png}
   \caption{\textbf{Rejected variants.}  Equity curves of the main failed ideas.
            None gave a robust, scalable gain over the simple delta-neutral pair of
-           Section~\ref{sec:stratA}.}
+           Strategy~5.1.}
   \label{fig:rejected}
 \end{figure}
 
 
 %% =====================================================================
-\subsection{Strategy A: Cross-Exchange Funding-Spread Capture}
+\subsection{Cross-Exchange Funding-Spread Capture (Strategy 5.1)}
 \label{sec:stratA}
 %% =====================================================================
 
 \subsubsection{Construction}
 
-Strategy~A keeps the funding income but removes the price, by trading the \emph{same
+Strategy~5.1 keeps the funding income but removes the price, by trading the \emph{same
 coin} on two venues  For each coin I watch the cross-exchange spread
 $g = \max_e f_{e} - \min_e f_{e}$.  When $g \ge 3$~bp I opn a delta-neutral pair: I
 long the perp on the lowest-funding venue (it pays me as a long) and short the perp on
@@ -1750,7 +2124,7 @@ Equation~\eqref{eq:voltarget}, and use only the eight most liquid coins.
 
 \subsubsection{Performance}
 
-In the six-month OOS window, Strategy~A gets a Sharpe of $\mathbf{2.34}$, $8.8\%$ a
+In the six-month OOS window, Strategy~5.1 gets a Sharpe of $\mathbf{2.34}$, $8.8\%$ a
 year, $3.7\%$ volatility, and a max drawdown of only $-0.9\%$ (Table~\ref{tab:headline},
 Figure~\ref{fig:Aequity})---a stable relative-value profile, the opposite of the
 baseline.
@@ -1955,13 +2329,13 @@ single spike, so this is not overfitting.
 
 
 %% =====================================================================
-\subsection{Strategy B: Negative Cash-and-Carry}
+\subsection{Negative Cash-and-Carry (Strategy 5.2)}
 \label{sec:stratB}
 %% =====================================================================
 
 \subsubsection{Construction}
 
-Strategy~B removes the price inside a \emph{single} venue.  On OKX, when funding is
+Strategy~5.2 removes the price inside a \emph{single} venue.  On OKX, when funding is
 deeply negative ($f \le -8$~bp), I long the perp (collecting $-f$) and short the spot
 of the saame coin, and I fund the, short by borrowing the coin.  The delta cancels, and
 what is lfet is the funding miuns the borrow cost; I exit when funding rises above
@@ -2038,9 +2412,9 @@ is.
 %% =====================================================================
 
 I split each Sharpe into cler, uncorrelated parts (Table~\ref{tab:decomp},
-Figure~\ref{fig:decompAB}).  Strategy~A is \textbf{dual-source}: funding ($+1.60$) and
+Figure~\ref{fig:decompAB}).  Strategy~5.1 is \textbf{dual-source}: funding ($+1.60$) and
 cross-exchange basis ($+1.62$) add about the same and are independent (correlation
-$-0.06$).  Strategy~B is \textbf{single-source}: it is funding ($+8.13$) only, and the
+$-0.06$).  Strategy~5.2 is \textbf{single-source}: it is funding ($+8.13$) only, and the
 same-exchange basis is near zero, so the hedge is clean.  A's basis (cross-venue) and
 B's basis (perp against spot) are not the same thing, and I should noot mix them.
 
@@ -2080,7 +2454,7 @@ B's basis (perp against spot) are not the same thing, and I should noot mix them
 \label{sec:risk}
 %% =====================================================================
 
-Strategy~B's naive $7.47$ should make me careful.  I cut it down step by step, using
+Strategy~5.2's naive $7.47$ should make me careful.  I cut it down step by step, using
 real data as much as I can.  A needs less of this, so the pipeline below is for B.
 
 \subsubsection{Is inventory risk actually in the PnL?}
@@ -2341,7 +2715,7 @@ $7.47$ (Figures~\ref{fig:regime},~\ref{fig:regimeboot}).
   \includegraphics[width=\linewidth]{figures/final_05i_final_bootstrap.png}
   \caption{\textbf{Single-year prediction interval.}  Bootstrapping over
            non-overlapping months gives a single-year Sharpe range of
-           $[2.41, 3.81]$---a 99\% chance of beating Strategy~A, but no chance of
+           $[2.41, 3.81]$---a 99\% chance of beating Strategy~5.1, but no chance of
            getting back the naive $7.47$.}
   \label{fig:regimeboot}
 \end{figure}
@@ -2468,7 +2842,7 @@ canot see it in the $-5\%$ drawdown, but it is real for sizing
 
 \subsubsection{Price-measurement sensitivity}
 
-Strategy~A's $2.34$ books the price on the \emph{mean} mark in each biin (like a TWAP).
+Strategy~5.1's $2.34$ books the price on the \emph{mean} mark in each biin (like a TWAP).
 If I book close-to-close instead, it falls to $1.4$ (Table~\ref{tab:measure}); this gap
 is a sampling effect, not a cost.  So the truth is between $1.4$ and $2.34$, and I
 report both.
@@ -2825,9 +3199,9 @@ is a kind of risk premium \cite{koijen2018carry}, and arbitrage has its limits
 
 \subsubsection{Where the return comes from}
 
-In Strategy~A, I am like a person standing between two venues.  On one venue there
+In Strategy~5.1, I am like a person standing between two venues.  On one venue there
 are too many longs and on the other venue there are too many shorts, so both sides
-pay funding to me.  In Strategy~B, the retail longs on the meme cins are too
+pay funding to me.  In Strategy~5.2, the retail longs on the meme cins are too
 crowded, so they pay a high funding to keep their position, and I take the other
 side.  So the return is not from prediction.  It is from giving the side that is
 missing.  This is also teh reason why the machine-learning model did not help.
@@ -2862,8 +3236,8 @@ exactly the limit to arbitrage \cite{frazzini2014betting}.
 \subsubsection{Benchmarking against the literature}
 
 Other crypto papers report a Sharpe of about $1$--$2$
-\cite{liu2022common, schmeling2023crypto} (Table~\ref{tab:bench}).  My Strategy~A
-($2.34$) and Strategy~B ($\approx 3$) are higher, but the main reason is that they
+\cite{liu2022common, schmeling2023crypto} (Table~\ref{tab:bench}).  My Strategy~5.1
+($2.34$) and Strategy~5.2 ($\approx 3$) are higher, but the main reason is that they
 are narrower and have smaller capacity.
 
 \begin{table}[htbp]
@@ -2894,9 +3268,9 @@ deployment needs.
 \subsubsection{Execution}
 
 Both strategies, make a decision every 4 hours, but inside teh bin the order should be
-done slowly, maker first.  This is the most important for Strategy~A, because it only
+done slowly, maker first.  This is the most important for Strategy~5.1, because it only
 breks even near $2.7$~bp; if I pay the taker spread, the Sharpe falls from about
-$2.3$ to about $1$.  Strategy~B is easier here, but it has one more problem: I must
+$2.3$ to about $1$.  Strategy~5.2 is easier here, but it has one more problem: I must
 borrow the coin for the short leg.
 
 \subsubsection{Monitoring}
@@ -2908,7 +3282,7 @@ regime, and a daily stop-loss.
 \subsubsection{Operational and custody risk}
 
 The biggest loss is not from the market but from operation: if one exchange, fails,
-the whole B book can be lost.  Strategy~B earns only about \$50k per year, but it can
+the whole B book can be lost.  Strategy~5.2 earns only about \$50k per year, but it can
 lose \$130k in one event.  So the main job is to spread the money across exchanges
 and counterparties, not to improve the signal.
 
@@ -2916,7 +3290,7 @@ and counterparties, not to improve the signal.
 
 I would not use the full size directly, from the backtest.  The plan have several
 steps: first a paper test to check the real fills, then a small-money test below the
-B cap, and only after that scale up Strategy~A (Strategy~B cannot scale).  Every step
+B cap, and only after that scale up Strategy~5.1 (Strategy~5.2 cannot scale).  Every step
 has a fixed target to pass.
 
 
@@ -2927,7 +3301,7 @@ has a fixed target to pass.
 
 I list my main worries, the most serious one first.
 
-\emph{Execution.}  Strategy~A's $2.34$ uses the average price inside the bin; if I
+\emph{Execution.}  Strategy~5.1's $2.34$ uses the average price inside the bin; if I
 use only one single price, it falls to about $1.4$.  My fill assummption ($0.8$) is
 also too simple.
 
@@ -2935,7 +3309,7 @@ also too simple.
 and crypto carry depends a lot on teh regime, so another year may be very different.
 
 \emph{Too many trials.}  Because I tried many variants, after the correction
-Strategy~A's Sharpe falls to $0.68$ (below $0.95$).  So the $2.34$ is only a hint,
+Strategy~5.1's Sharpe falls to $0.68$ (below $0.95$).  So the $2.34$ is only a hint,
 not a sure result, the and way to fix it is more data not more models.
 
 \emph{Data.}  The 4-hour grid is a little rough, and all the funding data come from
@@ -2966,9 +3340,15 @@ Each member exploits a different cell of the taxonomy.
 KAITO~\textsc{hype}--\textsc{okex}, with a deferred-decision rule timed
 three minutes before settlement; it earns an out-of-sample Sharpe of
 $2.35$ but its edge is thin and dies above $\sim 5$~bps of extra slippage.
-\emph{Strategy~2} (SIM Warren Hong and Wu Zeliang) contributes a further
-funding-rate strategy, to be inserted once the authors submit it.
-\emph{Strategy~3} (Deng Xuying and Liang Jiarui) blends a funding-rate
+\emph{Strategy~2} (SIM Warren Hong and Wu Zeliang) attacks the same-asset
+cross-exchange cell from two angles: a payment-aware funding carry that is
+strongly positive in gross funding ($+7{,}600$~bps over 589 trades) but
+only marginally net-positive after a \$5k-per-leg slippage stress (Sharpe
+$0.25$), and a no-arbitrage-bound convergence trade whose Perfect-Direction
+oracle proves the binding constraint is turnover cost rather than
+forecasting---repaired not by a better signal but by a partial-overshoot
+exit and a walk-forward pair filter.  \emph{Strategy~3} (Deng Xuying and
+Liang Jiarui) blends a funding-rate
 engine with a technical-momentum engine into a weekly, dollar-neutral
 CTREND long/short book; over a falling market ($-66.3\%$) it returns
 $+48.2\%$ at a Sharpe of $1.98$, with the funding overlay smoothing returns
@@ -2979,8 +3359,8 @@ spot borrowing is required; with real spread calibration it delivers a
 stable normalised net PnL of $0.0462$ (Sharpe $7.65$, drawdown $-0.11\%$)
 and survives train--test and walk-forward checks.  \emph{Strategy~5} (Cao
 Zhaoli) trades the same-coin cross-venue funding spread at scale
-(Strategy~A, Sharpe $2.34$, any size) and a single-venue negative
-cash-and-carry (Strategy~B), whose headline in-regime $7.47$ is honestly
+(Strategy~5.1, Sharpe $2.34$, any size) and a single-venue negative
+cash-and-carry (Strategy~5.2), whose headline in-regime $7.47$ is honestly
 deflated by capacity and regime to a long-run $\approx 3$ within
 $[2.41, 3.81]$ and a hard \$130{,}926 cap.
 

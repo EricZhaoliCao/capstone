@@ -12,9 +12,11 @@ Single combined LaTeX report merging all four contributions.
    tables OCR'd from the original images.
 2. **Strategy 1: Rule-Based Cross-Exchange Capture** — Chen Junan (3036555025);
    converted from `cja/report/main.typ`.
-3. **Strategy 2: [Title TBC]** — SIM Warren Hong (3036555893) and Wu Zeliang
-   (3036556823); **placeholder** — heading + byline in place, content to be
-   dropped in once submitted.
+3. **Strategy 2: Same-Asset Cross-Exchange Funding Strategies** — two
+   sub-strategies: **2.1** Payment-Aware Funding Carry, SIM Warren Hong
+   (3036555893), from `warren_latex_package` (`warren_*` figures); **2.2**
+   No-Arbitrage-Bound Convergence Trade, Wu Zeliang (3036556823), from
+   `rma_latex` (`rma_fig*` figures).
 4. **Strategy 3: Dual-Engine Funding + Momentum Long/Short** — Deng Xuying
    (3036555556) and Liang Jiarui (3036549789); converted from
    `ljr&dxy/Funding+Momentum.docx`, 3 figures (`ljr_fig*`).
@@ -23,7 +25,9 @@ Single combined LaTeX report merging all four contributions.
    conclusion trimmed, 7 figures placed in original document order.
 6. **Strategy 5: Cross-Exchange Spread + Negative Cash-and-Carry** — Cao Zhaoli
    (3036668420); the original `Funding_Arbitrage` body, headings demoted one
-   level, its standalone intro/conclusion folded into the shared ones.
+   level, intro/conclusion folded into the shared ones. Its two sub-strategies
+   are now named **5.1** (cross-exchange spread) and **5.2** (negative
+   cash-and-carry), formerly "Strategy A/B".
 7. **Conclusion** — unified synthesis of all five strategies.
 8. **References** — single merged list (IEEEtran style).
 
