@@ -1,20 +1,43 @@
-# Funding Arbitrage — Capstone Project
+# Merged Group Report — Funding-Rate Arbitrage (MFIN7092)
 
-MFIN7092 final project: a study of funding-rate arbitrage strategies in
-cryptocurrency perpetual futures markets.
+Single combined LaTeX report merging all four contributions.
 
-## Contents
+## Files
+- `report.tex` — the merged document (two-column IEEE style)
+- `report_bib.bib` — merged bibliography (Cao's BibTeX + Liang Mengxuan's references)
+- `figures/` — all figures: mine (`an_*`, `eda_*`, `final_*`), cja (`cja_*`), lmx (`lmx_fig1..7`)
 
-| File | Description |
-|------|-------------|
-| `strategies_final.ipynb` | Main analysis notebook — strategy construction, backtests, and results |
-| `report.tex` | LaTeX source of the final report |
-| `report_bib.bib` | Bibliography |
-| `MFIN7092_Final_Project.pdf` | Compiled final report |
-| `figures/` | Figures used in the report |
+## Structure
+1. **Introduction** — Liang Yingxi (3035771024); includes the two taxonomy
+   tables OCR'd from the original images.
+2. **Strategy 1: Rule-Based Cross-Exchange Capture** — Chen Junan (3036555025);
+   converted from `cja/report/main.typ`.
+3. **Strategy 2: Cost-Aware Positive Funding-Basis Carry** — Liang Mengxuan
+   (3036551495); converted from the `.docx`, redundant intro/lit-review/
+   conclusion trimmed, 7 figures placed in original document order.
+4. **Strategy 3: Cross-Exchange Spread + Negative Cash-and-Carry** — Cao Zhaoli
+   (3036668420); the original `Funding_Arbitrage` body, headings demoted one
+   level, its standalone intro/conclusion folded into the shared ones.
+5. **Conclusion** — unified synthesis of all three strategies.
+6. **References** — single merged list (IEEEtran style).
 
-## Getting started
+Each part carries its author's name + student ID as a byline under the heading.
 
-Open `strategies_final.ipynb` in Jupyter to reproduce the analysis. The
-compiled report (`MFIN7092_Final_Project.pdf`) summarizes the methodology
-and findings.
+## Building
+No TeX engine is installed on this machine, so the PDF was **not** compiled
+here. Build on Overleaf (or local TeX Live) with:
+
+```
+pdflatex report
+bibtex   report
+pdflatex report
+pdflatex report
+```
+
+`IEEEtran.bst` is needed for the bibliography (standard on Overleaf).
+
+## Decisions taken (confirmed with the team)
+- Unified single report (one shared intro + conclusion + bibliography),
+  not four self-contained parts.
+- Two-column IEEE layout; wide tables use `table*` (full page width).
+- One merged bibliography at the end.
