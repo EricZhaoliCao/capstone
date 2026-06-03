@@ -64,9 +64,10 @@
        Swaps:\\ A Multi-Strategy Empirical Study of Funding-Rate Arbitrage}}
 
 \author{Liang Yingxi\,(3035771024) \quad Chen Junan\,(3036555025) \quad
-        Deng Xuying\,(3036555556) \\[2pt]
-        Liang Jiarui\,(3036549789) \quad Liang Mengxuan\,(3036551495) \quad
-        Cao Zhaoli\,(3036668420) \\[3pt]
+        SIM Warren Hong\,(3036555893) \\[2pt]
+        Wu Zeliang\,(3036556823) \quad Deng Xuying\,(3036555556) \quad
+        Liang Jiarui\,(3036549789) \\[2pt]
+        Liang Mengxuan\,(3036551495) \quad Cao Zhaoli\,(3036668420) \\[3pt]
         {\tt\small In collaboration with Auros HK Limited}\\[2pt]
         The University of Hong Kong}
 
@@ -85,19 +86,21 @@ strategy space along two dimensions---asset class and exchange---and each
 team member develops one strategy within it.  \textbf{Strategy~1} is a
 rule-based, deferred-decision cross-exchange capture on
 KAITO~(\textsc{hype}--\textsc{okex}) that earns an out-of-sample Sharpe of
-$2.35$ but is fragile to slippage and timing.  \textbf{Strategy~2} blends a
+$2.35$ but is fragile to slippage and timing.  \textbf{Strategy~2} (SIM
+Warren Hong and Wu Zeliang) contributes a further funding-rate strategy,
+added separately below.  \textbf{Strategy~3} blends a
 funding-rate engine with a technical-momentum engine into a weekly,
 dollar-neutral long/short CTREND book that returns $+48.2\%$ against a
-$-66.3\%$ market (Sharpe $1.98$).  \textbf{Strategy~3} is a cost-aware
+$-66.3\%$ market (Sharpe $1.98$).  \textbf{Strategy~4} is a cost-aware
 positive funding-basis carry on Binance (BTC/ETH/SOL) that, after real
 spread calibration, reaches a normalised net PnL of $0.0462$ (Sharpe
 $7.65$, max drawdown $-0.11\%$) by trading only the positive-funding,
-positive-basis subset.  \textbf{Strategy~4} shows that the na\"ive
+positive-basis subset.  \textbf{Strategy~5} shows that the na\"ive
 funding-rank cross-section \emph{loses} money on full PnL (Sharpe $-2.54$)
 and builds two delta-neutral trades instead: a scalable cross-exchange
 spread (Strategy~A, Sharpe $2.34$) and a negative cash-and-carry
 (Strategy~B, in-regime $7.47$, honestly de-risked to $\approx 3$ and capped
-at \$130{,}926).  Across all four, the common lesson is the same: funding
+at \$130{,}926).  Across all five, the common lesson is the same: funding
 carry is real but small, survives only when price risk and execution cost
 are accounted for honestly, and is bounded by capacity and regime rather
 than by signal quality.
@@ -624,8 +627,20 @@ which more sophisticated approaches can be benchmarked.
 
 
 %% =====================================================================
-\section{Strategy 2: A Dual-Engine Funding-plus-Momentum Long/Short Strategy}
+\section{Strategy 2: [Title to be confirmed]}
 \label{sec:strat2}
+%% =====================================================================
+\begingroup\par\vspace{-2pt}%
+{\small\itshape SIM Warren Hong\ (Student ID: 3036555893)\quad
+ Wu Zeliang\ (Student ID: 3036556823)}\par\vspace{4pt}\endgroup
+
+\emph{[This strategy will be added once the authors submit their text and
+figures.]}
+
+
+%% =====================================================================
+\section{Strategy 3: A Dual-Engine Funding-plus-Momentum Long/Short Strategy}
+\label{sec:strat3}
 %% =====================================================================
 \begingroup\par\vspace{-2pt}%
 {\small\itshape Deng Xuying\ (Student ID: 3036555556)\quad
@@ -810,8 +825,8 @@ intensive: moving capital across six exchanges introduces latency and
 margin-fragmentation costs that a backtest cannot fully model.
 
 %% =====================================================================
-\section{Strategy 3: A Cost-Aware Positive Funding-Basis Carry}
-\label{sec:strat3}
+\section{Strategy 4: A Cost-Aware Positive Funding-Basis Carry}
+\label{sec:strat4}
 %% =====================================================================
 \partauthor{Liang Mengxuan}{3036551495}
 
@@ -1175,8 +1190,8 @@ that would require unmodelled spot borrowing.
 
 
 %% =====================================================================
-\section{Strategy 4: Cross-Exchange Spread Capture and Negative Cash-and-Carry}
-\label{sec:strat4}
+\section{Strategy 5: Cross-Exchange Spread Capture and Negative Cash-and-Carry}
+\label{sec:strat5}
 %% =====================================================================
 \partauthor{Cao Zhaoli}{3036668420}
 
@@ -2935,13 +2950,13 @@ only one source.
 \label{sec:conclusion}
 %% =====================================================================
 
-Taken together, the four strategies map the funding-rate arbitrage space
+Taken together, the five strategies map the funding-rate arbitrage space
 of Table~\ref{tab:taxonomy} and reach a consistent verdict.  The funding
 mechanism does anchor perpetual prices to spot, but only weakly: the
-direct convergence pull is small (Strategy~3 finds a same-sign basis
+direct convergence pull is small (Strategy~4 finds a same-sign basis
 convergence edge of barely one percentage point), and the carry it pays is
 modest once price risk and execution cost are charged honestly.  Naive
-harvesting fails---Strategy~4 shows a funding-rank cross-section losing
+harvesting fails---Strategy~5 shows a funding-rank cross-section losing
 $-2.54$ on full PnL---so every viable trade in this report is built around
 removing price risk rather than predicting it.
 
@@ -2951,16 +2966,18 @@ Each member exploits a different cell of the taxonomy.
 KAITO~\textsc{hype}--\textsc{okex}, with a deferred-decision rule timed
 three minutes before settlement; it earns an out-of-sample Sharpe of
 $2.35$ but its edge is thin and dies above $\sim 5$~bps of extra slippage.
-\emph{Strategy~2} (Deng Xuying and Liang Jiarui) blends a funding-rate
+\emph{Strategy~2} (SIM Warren Hong and Wu Zeliang) contributes a further
+funding-rate strategy, to be inserted once the authors submit it.
+\emph{Strategy~3} (Deng Xuying and Liang Jiarui) blends a funding-rate
 engine with a technical-momentum engine into a weekly, dollar-neutral
 CTREND long/short book; over a falling market ($-66.3\%$) it returns
 $+48.2\%$ at a Sharpe of $1.98$, with the funding overlay smoothing returns
-when the trend engine struggles.  \emph{Strategy~3} (Liang Mengxuan) trades
+when the trend engine struggles.  \emph{Strategy~4} (Liang Mengxuan) trades
 a positive funding-\emph{basis} carry on Binance majors, deliberately
 restricted to the long-spot / short-perpetual side so that no unmodelled
 spot borrowing is required; with real spread calibration it delivers a
 stable normalised net PnL of $0.0462$ (Sharpe $7.65$, drawdown $-0.11\%$)
-and survives train--test and walk-forward checks.  \emph{Strategy~4} (Cao
+and survives train--test and walk-forward checks.  \emph{Strategy~5} (Cao
 Zhaoli) trades the same-coin cross-venue funding spread at scale
 (Strategy~A, Sharpe $2.34$, any size) and a single-venue negative
 cash-and-carry (Strategy~B), whose headline in-regime $7.47$ is honestly
