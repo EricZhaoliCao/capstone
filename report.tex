@@ -73,10 +73,11 @@
 
 \date{}
 
+\twocolumn[%
+\begin{@twocolumnfalse}
 \maketitle
-\thispagestyle{empty}
 
-%% -- Abstract ---------------------------------------------------------
+%% -- Abstract (full width, single column) -----------------------------
 \begin{abstract}
 In collaboration with Auros HK, we examine whether the funding-rate
 mechanism of crypto perpetual swaps keeps the perpetual price anchored to
@@ -110,7 +111,11 @@ carry is real but small, survives only when price risk and execution cost
 are accounted for honestly, and is bounded by capacity and regime rather
 than by signal quality.
 \end{abstract}
-
+\bigskip
+\end{@twocolumnfalse}
+]
+\thispagestyle{empty}
+\clearpage
 
 %% =====================================================================
 \section{Introduction}
@@ -226,26 +231,26 @@ Hyperliquid funding is hourly and aggregated to 8-hour buckets by summing;
 Bybit data ends prematurely in July 2025 and is excluded from the main
 analysis.
 
-\begin{table*}[t!]
+\begin{table}[H]
   \centering
-  \caption{\textbf{Data coverage by exchange.}  Hyperliquid funding is
-           hourly (summed to 8h); Bybit (\texttt{byde}) ends early and is
-           excluded from the main analysis.}
+  \caption{\textbf{Data coverage by exchange.}  All venues cover AVAX,
+           BERA, BTC, KAITO, and PIPPIN (Bybit \texttt{byde} lacks PIPPIN).
+           Hyperliquid funding is hourly (summed to 8h); Bybit ends early
+           and is excluded from the main analysis.}
   \label{tab:s1-coverage}
-  \begin{tabular}{lllll}
+  \begin{tabular}{llll}
     \toprule
-    \textbf{Exchange} & \textbf{Symbols} & \textbf{Funding freq.}
-      & \textbf{BBO start} & \textbf{BBO end} \\
+    \textbf{Exchange} & \textbf{Funding freq.} & \textbf{BBO start} & \textbf{BBO end} \\
     \midrule
-    \texttt{binf} & AVAX, BERA, BTC, KAITO, PIPPIN & 8h            & 2025-03-01 & 2026-02-28 \\
-    \texttt{byde} & AVAX, BERA, BTC, KAITO         & 8h            & 2025-03-01 & 2025-07-16 \\
-    \texttt{gate} & AVAX, BERA, BTC, KAITO, PIPPIN & 8h            & 2025-03-01 & 2026-02-28 \\
-    \texttt{hype} & AVAX, BERA, BTC, KAITO, PIPPIN & 1h ($\to$8h)  & 2025-03-01 & 2026-02-28 \\
-    \texttt{kusw} & AVAX, BERA, BTC, KAITO, PIPPIN & 8h            & 2025-03-01 & 2026-02-28 \\
-    \texttt{okex} & AVAX, BERA, BTC, KAITO, PIPPIN & 8h            & 2025-03-01 & 2026-02-28 \\
+    \texttt{binf} & 8h            & 2025-03-01 & 2026-02-28 \\
+    \texttt{byde} & 8h            & 2025-03-01 & 2025-07-16 \\
+    \texttt{gate} & 8h            & 2025-03-01 & 2026-02-28 \\
+    \texttt{hype} & 1h ($\to$8h)  & 2025-03-01 & 2026-02-28 \\
+    \texttt{kusw} & 8h            & 2025-03-01 & 2026-02-28 \\
+    \texttt{okex} & 8h            & 2025-03-01 & 2026-02-28 \\
     \bottomrule
   \end{tabular}
-\end{table*}
+\end{table}
 
 Table~\ref{tab:s1-fundstats} reports KAITO funding-rate statistics by
 exchange over the in-sample period (March--October 2025).  All venues show
@@ -998,12 +1003,12 @@ Because $\beta$, $R_{\min}$ and the lookback $W$ are all hyperparameters, we sel
   \end{tabular}
 \end{table*}
 
-\begin{figure*}[t!]
+\begin{figure}[htbp]
   \centering
-  \includegraphics[width=0.96\textwidth]{figures/rma_fig09_cpcv.png}
+  \includegraphics[width=\linewidth]{figures/rma_fig09_cpcv.png}
   \caption{\textbf{Disciplined CPCV result.} Left: per-fold significance of the recipe's edge---the paired daily Newey--West $t$ of (chosen $-$ baseline) clears $+1.96$ in all ten clean folds. Right: per-fold out-of-sample Sharpe; the chosen book's median sits above the baseline but the spread is wide, so the \emph{direction} is bankable while the \emph{level} is not.}
   \label{fig:rma_cpcv}
-\end{figure*}
+\end{figure}
 
 \subsubsection{Economic interpretation and limitations}
 
