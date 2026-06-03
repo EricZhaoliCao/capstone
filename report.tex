@@ -196,6 +196,104 @@ structured overview of each strategy in turn.
 %% =====================================================================
 \partauthor{Chen Junan}{3036555025}
 
+As a low-risk, funding-harvesting complement to directional market-making
+inventory at our partner Auros (a Binance VIP9 market maker), this strategy
+exploits cross-exchange funding-rate differentials with a fully rule-based,
+\emph{deferred-decision} design---deliberately avoiding predictive
+modelling so that any profitability is attributable to the structure of the
+funding mechanism itself.  Crypto perpetual markets exhibit larger and more
+persistent funding dislocations than traditional venues
+\cite{he2022perpetual, makarov2020trading}, and the recurring
+funding-settlement cycle provides a time-predictable arbitrage window.
+
+\subsection{Data and Funding-Rate Characteristics}
+
+The dataset consists of minute-level BBO quotes, minute-level OHLCV,
+funding-rate history, and instrument specifications for five
+tokens---AVAX, BERA, BTC, KAITO, and PIPPIN---across six exchanges, over
+1~March 2025 to 28~February 2026 (Table~\ref{tab:s1-coverage}).
+Hyperliquid funding is hourly and aggregated to 8-hour buckets by summing;
+Bybit data ends prematurely in July 2025 and is excluded from the main
+analysis.
+
+\begin{table*}[tp]
+  \centering
+  \caption{\textbf{Data coverage by exchange.}  Hyperliquid funding is
+           hourly (summed to 8h); Bybit (\texttt{byde}) ends early and is
+           excluded from the main analysis.}
+  \label{tab:s1-coverage}
+  \begin{tabular}{lllll}
+    \toprule
+    \textbf{Exchange} & \textbf{Symbols} & \textbf{Funding freq.}
+      & \textbf{BBO start} & \textbf{BBO end} \\
+    \midrule
+    \texttt{binf} & AVAX, BERA, BTC, KAITO, PIPPIN & 8h            & 2025-03-01 & 2026-02-28 \\
+    \texttt{byde} & AVAX, BERA, BTC, KAITO         & 8h            & 2025-03-01 & 2025-07-16 \\
+    \texttt{gate} & AVAX, BERA, BTC, KAITO, PIPPIN & 8h            & 2025-03-01 & 2026-02-28 \\
+    \texttt{hype} & AVAX, BERA, BTC, KAITO, PIPPIN & 1h ($\to$8h)  & 2025-03-01 & 2026-02-28 \\
+    \texttt{kusw} & AVAX, BERA, BTC, KAITO, PIPPIN & 8h            & 2025-03-01 & 2026-02-28 \\
+    \texttt{okex} & AVAX, BERA, BTC, KAITO, PIPPIN & 8h            & 2025-03-01 & 2026-02-28 \\
+    \bottomrule
+  \end{tabular}
+\end{table*}
+
+Table~\ref{tab:s1-fundstats} reports KAITO funding-rate statistics by
+exchange over the in-sample period (March--October 2025).  All venues show
+negative mean funding---shorts paid longs on average---and Hyperliquid
+exhibits the widest dispersion (standard deviation $18.76$~bps, minimum
+$-259$~bps), reflecting its distinct hourly mechanism and the token's
+illiquidity (Figure~\ref{fig:s1-funddist}).  The
+\textsc{hype}--\textsc{okex} spread is mean-reverting but spikes episodically
+beyond $\pm 50$~bps (Figure~\ref{fig:s1-spreadts}), and funding comoves
+across venues---all pairwise correlations fall in $0.59$--$0.78$, with
+Hyperliquid the least correlated (Figure~\ref{fig:s1-corr}).
+
+\begin{table}[htbp]
+  \centering
+  \caption{\textbf{KAITO funding-rate statistics by exchange} (bps,
+           March--October 2025).}
+  \label{tab:s1-fundstats}
+  \begin{tabular}{lrrrrrr}
+    \toprule
+    \textbf{Ex.} & \textbf{Obs} & \textbf{Mean} & \textbf{Std}
+      & \textbf{Min} & \textbf{Max} & \textbf{Med} \\
+    \midrule
+    \texttt{binf} & 733 & $-2.77$ & 11.21 & $-200.0$ & 0.50 & $-0.10$ \\
+    \texttt{gate} & 733 & $-2.84$ & 12.44 & $-200.0$ & 0.50 & 0.02 \\
+    \texttt{hype} & 732 & $-5.34$ & 18.76 & $-259.2$ & 1.52 & $-0.48$ \\
+    \texttt{kusw} & 408 & $-3.29$ & 11.73 & $-161.7$ & 4.29 & $-1.14$ \\
+    \texttt{okex} & 733 & $-1.92$ &  9.71 & $-200.0$ & 3.20 & 0.12 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\linewidth]{figures/cja_funding_rate_distribution.png}
+  \caption{\textbf{KAITO funding-rate distribution by exchange}
+           (8-hour aligned).  Hyperliquid shows the widest interquartile
+           range and the most extreme outliers.}
+  \label{fig:s1-funddist}
+\end{figure}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\linewidth]{figures/cja_funding_spread_timeseries.png}
+  \caption{\textbf{KAITO \textsc{hype}--\textsc{okex} funding spread}
+           (\textsc{hype} minus \textsc{okex}, bps).  Mean-reverting with
+           episodic spikes beyond $\pm 50$~bps.}
+  \label{fig:s1-spreadts}
+\end{figure}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\linewidth]{figures/cja_correlation_heatmap.png}
+  \caption{\textbf{Cross-exchange funding-rate correlation for KAITO.}
+           All pairwise correlations are positive ($0.59$--$0.78$);
+           Hyperliquid is the least correlated.}
+  \label{fig:s1-corr}
+\end{figure}
+
 \subsection{Asset Selection}
 
 We screen five liquid perpetual-swap tokens---AVAX, BERA, BTC, KAITO, and
@@ -264,6 +362,11 @@ A trade is initiated only if all four conditions are satisfied:
         cross-exchange price risk erodes the profit before settlement.
 \end{enumerate}
 
+In the best KAITO configuration the basis-volatility, trend, and drift
+filters are set to permissive values, effectively disabling them; the
+robustness analysis in Section~\ref{sec:s1-robust} shows why tighter
+filters \emph{reduce} performance on this pair.
+
 \subsubsection{Exit rules}
 
 The core exit mechanism is z-score mean reversion: the position is closed
@@ -286,6 +389,15 @@ where $\mathrm{ER} = (\text{spread} - \text{total cost})/\text{basis
 volatility}$ and $\text{target}_{\mathrm{ER}} = 0.5$~bps.  The base
 notional is \$100k per leg.  This concentrates capital in high-conviction
 opportunities and scales down when the signal is weak.
+
+\subsubsection{Risk management}
+
+A risk manager enforces three hard constraints: a basis stop at $50$~bps
+(the position is liquidated if the cross-exchange price basis moves
+adversely by more than $50$~bps), a maximum holding period of $720$~hours,
+and take-profit / stop-loss thresholds at $2\%$ / $1\%$.  In practice the
+basis stop and the z-score exit are the most frequently triggered close
+reasons.
 
 \subsection{Empirical Results}
 
@@ -351,6 +463,14 @@ drag.  The decomposition confirms that the strategy's edge comes from
 harvesting funding-rate differentials rather than directional price
 movements.
 
+\subsubsection{Trade direction}
+
+All 19 out-of-sample trades were initiated in the same direction---long
+Hyperliquid and short OKX---because Hyperliquid consistently exhibited
+higher funding than OKX over the test period, and the deferred-decision
+rule only enters when the sign of the spread is stable through the decision
+window.
+
 \subsection{Sensitivity Analysis}
 
 We conduct two stress tests to assess how fragile the strategy's edge is
@@ -397,18 +517,109 @@ execution.  Both dimensions are binding: the strategy requires execution
 costs near base fee \emph{and} a decision exactly three minutes before
 settlement.
 
+\subsection{Robustness Checks}
+\label{sec:s1-robust}
+
+\subsubsection{Timing stability}
+
+Varying the decision window in a tight grid around the baseline
+(Table~\ref{tab:s1-timing}) confirms a sharp optimum at three minutes:
+moving to two minutes collapses Sharpe to $-1.37$ (too little time to
+execute), while four to six minutes gives slightly lower Sharpe
+($2.14$--$2.17$) as the basis proxy becomes noisier.  The result is robust
+to $\pm 1$~minute perturbations but not to larger deviations.
+
+\begin{table}[htbp]
+  \centering
+  \caption{\textbf{Timing stability around the optimal 3-minute window.}}
+  \label{tab:s1-timing}
+  \begin{tabular}{rrrrrr}
+    \toprule
+    \textbf{Window} & \textbf{Min.} & \textbf{Sharpe} & \textbf{Return}
+      & \textbf{Trades} & \textbf{Win} \\
+    \midrule
+    0.03 & 2 & $-1.37$ & $-0.65\%$ & 17 & 29.4\% \\
+    0.05 & 3 & 2.35    & 1.05\%    & 19 & 78.9\% \\
+    0.07 & 4 & 2.17    & 0.91\%    & 18 & 77.8\% \\
+    0.10 & 6 & 2.14    & 0.90\%    & 18 & 72.2\% \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\subsubsection{Filter sensitivity}
+
+Testing each entry filter in isolation (Table~\ref{tab:s1-filter}) shows
+that on KAITO tighter filters \emph{reduce} performance.  The trend filter
+has no discriminative power at any threshold, the drift filter is the most
+destructive (Sharpe halves to $0.64$ at $10$~bps), and the volatility
+filter degrades modestly.  KAITO's funding spreads are episodic and
+short-lived, so aggressive filtering eliminates more good signals than bad
+ones---which is why the baseline disables them.
+
+\begin{table*}[tp]
+  \centering
+  \caption{\textbf{Filter sensitivity.}  Each row tests one filter in
+           isolation (others disabled), except the last which applies all
+           three.}
+  \label{tab:s1-filter}
+  \begin{tabular}{lrrrrr}
+    \toprule
+    \textbf{Filter configuration} & \textbf{Sharpe} & \textbf{Return}
+      & \textbf{Trades} & \textbf{Win rate} & \textbf{Max DD} \\
+    \midrule
+    No filters (baseline)               & 2.35 & 1.05\% & 19 & 78.9\% & 0.18\% \\
+    Vol $\le 50$~bps                    & 1.97 & 0.88\% & 20 & 75.0\% & 0.21\% \\
+    Vol $\le 20$~bps                    & 2.05 & 0.85\% & 17 & 76.5\% & 0.18\% \\
+    Vol $\le 10$~bps                    & 1.73 & 0.63\% & 17 & 70.6\% & 0.12\% \\
+    Trend $\le 20$~bps                  & 2.35 & 1.05\% & 19 & 78.9\% & 0.18\% \\
+    Trend $\le 10$~bps                  & 2.35 & 1.05\% & 19 & 78.9\% & 0.18\% \\
+    Trend $\le 5$~bps                   & 2.35 & 1.05\% & 19 & 78.9\% & 0.18\% \\
+    Drift $\le 50$~bps                  & 1.94 & 0.85\% & 20 & 75.0\% & 0.21\% \\
+    Drift $\le 20$~bps                  & 1.08 & 0.43\% & 20 & 65.0\% & 0.24\% \\
+    Drift $\le 10$~bps                  & 0.64 & 0.25\% & 18 & 55.6\% & 0.24\% \\
+    All tight (vol\,20, trend\,5, drift\,10) & 0.69 & 0.27\% & 17 & 52.9\% & 0.16\% \\
+    \bottomrule
+  \end{tabular}
+\end{table*}
+
+\subsubsection{Spread-source comparison}
+
+Comparing the fixed $8$-hour-old published rate against a running TWAP
+proxy estimated from basis observations (Table~\ref{tab:s1-spread}), the
+proxy underperforms ($1.43$ versus $2.35$) because, lacking spot data, it
+is computed from perpetual--perpetual rather than perpetual--spot basis and
+so systematically underestimates the true funding spread.  Until spot data
+is available, the published rate is the more reliable signal.
+
+\begin{table}[htbp]
+  \centering
+  \caption{\textbf{Fixed spread versus running TWAP proxy.}}
+  \label{tab:s1-spread}
+  \begin{tabular}{lrrr}
+    \toprule
+    \textbf{Spread source} & \textbf{Sharpe} & \textbf{Return} & \textbf{Trades} \\
+    \midrule
+    Fixed spread (8h-old rate) & 2.35 & 1.05\% & 19 \\
+    Running TWAP proxy         & 1.43 & 0.45\% & 14 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
 \subsection{Limitations}
 
-The results above should be interpreted with three caveats.  First, the
+The results above should be interpreted with four caveats.  First, the
 backtest assumes instantaneous full taker execution; in practice a \$100k
 single-shot order on KAITO may walk the book, producing fills
-significantly worse than the bid--ask mid, and order-book depth has not
-been analysed.  Second, the optimal decision window (3 minutes) was
-validated only on KAITO over a four-month test period, so cross-asset and
-longer-horizon robustness are untested.  Third, the strategy is
-intentionally simple---fully rule-based, without predictive modelling---and
-serves as a transparent baseline against which more sophisticated
-approaches can be benchmarked.
+significantly worse than the bid--ask mid (mitigations include order
+slicing or earlier entry, though the latter reintroduces price risk).
+Second, the optimal decision window (3 minutes) and the finding that
+filters are counterproductive were validated only on KAITO over a
+four-month test period, so cross-asset and longer-horizon robustness are
+untested.  Third, we lack spot/index price data, which prevents exact
+replication of the exchange funding calculation and biases the running
+proxy.  Fourth, the strategy is intentionally simple---fully rule-based,
+without predictive modelling---and serves as a transparent baseline against
+which more sophisticated approaches can be benchmarked.
 
 
 %% =====================================================================
@@ -2773,6 +2984,8 @@ carry.
 %% -- References -------------------------------------------------------
 {\small
 \bibliographystyle{IEEEtran}
+% Strategy 1 (Chen Junan) citation
+\nocite{he2022perpetual}
 % Strategy 4 (Cao) citations
 \nocite{ackerer2024perpetual}
 \nocite{makarov2020trading}
