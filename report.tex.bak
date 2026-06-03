@@ -200,7 +200,6 @@ structured overview of each strategy in turn.
 
 
 %% =====================================================================
-\clearpage
 \section{Strategy 1: A Rule-Based Cross-Exchange Funding-Rate Capture}
 \label{sec:strat1}
 %% =====================================================================
@@ -633,7 +632,6 @@ which more sophisticated approaches can be benchmarked.
 
 
 %% =====================================================================
-\clearpage
 \section{Strategy 2: Same-Asset Cross-Exchange Funding Strategies}
 \label{sec:strat2}
 %% =====================================================================
@@ -824,7 +822,6 @@ The strategy has three main limitations. First, the final post-slippage Sharpe i
 
 The strongest version of the strategy would require tighter live execution modelling: venue-specific depth at both entry and exit, rejection or haircut of BBO-only venues, and a live capacity limit by asset and venue. It would also need monitoring for stale funding timestamps, BBO quality, sudden interval changes, and concentration in small assets. Overall, Strategy 2.1 supports the report's broader conclusion: funding carry is real, but only a small part of it survives realistic frictions.
 
-\clearpage
 \subsection{A No-Arbitrage-Bound Cross-Venue Convergence Trade with Asymmetric Funding Clocks (Strategy 2.2)}
 \begingroup\par\vspace{-2pt}%
 {\small\itshape Wu Zeliang\ (Student ID: 3036556823)}\par\vspace{4pt}\endgroup
@@ -852,6 +849,13 @@ with $I_t$ the per-asset cross-venue median price (excluding $A,B$ when at least
 \end{aligned}
 \end{equation}
 Figure~\ref{fig:rma_geometry} shows the resulting trade geometry: entries fire when $\rho$ crosses a band edge and the baseline exit is the first zero-crossing, implemented by a three-state position machine.
+
+\begin{figure*}[t]
+  \centering
+  \includegraphics[width=0.92\textwidth]{figures/rma_fig01_signal_geometry.png}
+  \caption{\textbf{Trading-signal geometry (asymmetric $\kappa$).} Left: the asymmetric residual $\rho^{AB}_t$ against the constant no-arb band $[\rho^{AB}_\ell,\rho^{AB}_u]$; the shaded interior is the no-trade region. Entries fire on a band crossing, the baseline exit is the zero-crossing. Right: the three-state machine the rules implement. The path shown is a synthetic mean-reverting process used only to expose the geometry.}
+  \label{fig:rma_geometry}
+\end{figure*}
 
 \subsubsection{Data and pair universe}
 
@@ -884,13 +888,50 @@ Aggregated equal-weight across the $40$ eligible pairs, the baseline \emph{loses
   \end{tabular}
 \end{table}
 
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\columnwidth]{figures/rma_fig02_baseline_equity.png}
+  \caption{\textbf{Baseline portfolio equity and drawdown.} Cumulative P\&L (top) and drawdown (bottom) of the equal-weight eligible-pair book. The signal is theory-grounded, but acting on every crossing bleeds steadily to a Sharpe of $-6.48$.}
+  \label{fig:rma_baseline}
+\end{figure}
+
 \subsubsection{Cost-drag diagnosis}
 
 Why does a correct signal lose? Decomposing each pair's full-sample P\&L into price, funding, spread, fee and impact components (Figure~\ref{fig:rma_decomp}) isolates the mechanism: the worst pairs are not short of gross edge---their price-plus-funding stack is often sizeable---but their cost stack (spread $+$ fee, driven by turnover) is larger still, so the net total (black diamond) sits deep in the red. Equivalently, every losing pair has a cost-to-gross ratio above one. The contrast at the single-pair level (Figure~\ref{fig:rma_pairdiag}) is the clearest statement of the problem: the best pair (BTC \textsc{hype}/\textsc{okex}, Sharpe $+1.33$) trades sparsely and lets gross edge clear cost, whereas the worst pair (BERA \textsc{gate}/\textsc{hype}, Sharpe $-4.56$, drawdown $-71\%$) churns almost continuously on the minute clock, and that turnover---not an adverse signal---is what destroys it. The implication is directional: the fix is to \emph{trade less}, not to forecast better.
 
+\begin{figure*}[t]
+  \centering
+  \includegraphics[width=0.86\textwidth]{figures/rma_fig03_pnl_decomposition.png}
+  \caption{\textbf{Pair P\&L decomposition, top and bottom Sharpe pairs.} Stacked price, funding, spread, fee and impact components as a share of notional; the black diamond is the net total. Losers carry ample gross edge but a larger cost stack---a turnover problem, not a signal problem.}
+  \label{fig:rma_decomp}
+\end{figure*}
+
+\begin{figure*}[t]
+  \centering
+  \begin{minipage}[t]{0.49\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{figures/rma_fig04_best_pair.png}
+  \end{minipage}\hfill
+  \begin{minipage}[t]{0.49\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{figures/rma_fig05_worst_pair.png}
+  \end{minipage}
+  \caption{\textbf{Best versus worst pair diagnostics.} Each panel shows cumulative P\&L attribution, drawdown, the hourly signal against the no-arb band, and the minute-executed position. Left---best pair (BTC \textsc{hype}/\textsc{okex}, Sharpe $+1.33$): sparse positioning, gross edge clears cost. Right---worst pair (BERA \textsc{gate}/\textsc{hype}, Sharpe $-4.56$): near-continuous position flipping, cost overwhelms gross edge. (Note the differing $\rho$ scales between the two signal panels.)}
+  \label{fig:rma_pairdiag}
+\end{figure*}
+\FloatBarrier
+
 \subsubsection{An oracle upper bound: it is a cost problem, not a forecasting one}
 
 To confirm that the binding constraint is cost rather than direction, we run a \emph{Perfect-Direction oracle}: at every hourly timestamp it is handed the next hour's realised gross spread return and chooses long, short or flat optimally, after which the same execution engine applies all path-dependent costs. If forecasting were the bottleneck, perfect foresight would rescue the book. It does not (Figure~\ref{fig:rma_oracle}): on the headline universe the oracle returns $-359\%$ cumulatively versus the baseline's $-16\%$, because perfect direction \emph{trades every hour} and therefore pays the maximum possible spread and fee. A non-tradable strategy that cannot be beaten on signal still loses by an order of magnitude more---direct evidence that the cost structure, driven by turnover, is the object worth attacking.
+
+\begin{figure*}[t]
+  \centering
+  \includegraphics[width=0.86\textwidth]{figures/rma_fig06_oracle.png}
+  \caption{\textbf{Perfect-Direction oracle versus baseline.} Equal-weight cumulative P\&L (top) and drawdown (bottom). Perfect hourly foresight loses far \emph{more} than the baseline because it trades every bar: the constraint is execution cost at the implied turnover, not signal quality.}
+  \label{fig:rma_oracle}
+\end{figure*}
+\FloatBarrier
 
 \subsubsection{Disciplined exit rules}
 
@@ -920,11 +961,26 @@ If turnover is the enemy, the first lever is to leave positions later than the f
   \end{tabular}
 \end{table}
 
+\begin{figure*}[t]
+  \centering
+  \includegraphics[width=0.96\textwidth]{figures/rma_fig07_exit_variants.png}
+  \caption{\textbf{Exit-rule comparison.} Left: mean $\Delta$Sharpe versus baseline by family and parameter. Right: turnover reduction against net-return change---every family buys lower cost with some convergence give-back. Partial overshoot $\beta\approx0.5$ is the robust net winner.}
+  \label{fig:rma_variants}
+\end{figure*}
+\FloatBarrier
+
 \subsubsection{Pre-trade pair filter and no-look-ahead validation}
 
 The higher-leverage fix is to \emph{not trade} pairs whose gross edge does not clear their cost. We implement this as a true walk-forward filter on the same monthly in-sample$\rightarrow$out-of-sample scaffold the report uses: for each out-of-sample month $m$, features are computed only on the trailing window $[m-W,\,m)$, the gate $\mathrm{gross\_ann}/|\mathrm{cost\_ann}|\ge R_{\min}$ is applied, and the survivors are traded equal-weight in month $m$. No realised out-of-sample information enters the selection. The filter and the exit rule address different parts of the same problem and stack (Figure~\ref{fig:rma_walkforward}): under both exit rules the filter turns a deeply negative book positive, and the best out-of-sample portfolio is overshoot $\beta=0.5$ \emph{and} the filter (Sharpe $0.26\rightarrow0.35$ as the exit rule is added, versus $-4.38$ for the unfiltered baseline).
 
 Because $\beta$, $R_{\min}$ and the lookback $W$ are all hyperparameters, we select them honestly. A nested train/validation/test split chooses $(W,\beta,R_{\min})$ on validation months and evaluates \emph{once} on a disjoint later block; the locked recipe lifts the test Sharpe from $-20.55$ to $-1.88$ with a paired daily Newey--West $t=+4.12$ ($p<0.01$) on identical days. We then replace the single split with CPCV: the out-of-sample months are partitioned into folds, each fold is held out in turn, validation months whose feature/label spans overlap the test fold are \emph{purged}, and an embargo drops months adjacent to the test block. The disciplined run shrinks the search to the two complementary knobs ($\beta,R_{\min}$, $16$ configs) and reports, per fold, the paired Newey--West $t$ and the deflated Sharpe (Figure~\ref{fig:rma_cpcv}, Table~\ref{tab:rma_validation}). The verdict is sharp and honest: the chosen recipe beats the baseline in \emph{every} clean fold ($10/10$, $p<0.05$), with per-fold paired $t$-statistics clustered well above $+1.96$; but the chosen book's \emph{absolute} test Sharpe swings from strongly positive to negative across folds, and the per-fold deflated $P(\mathrm{SR}>0)$ is correspondingly bimodal. The recipe \emph{helps} robustly; the Sharpe \emph{level} is not established by this sample.
+
+\begin{figure*}[t]
+  \centering
+  \includegraphics[width=0.86\textwidth]{figures/rma_fig08_walkforward.png}
+  \caption{\textbf{Walk-forward out-of-sample equity: exit rule $\times$ pre-trade filter.} The filter lifts both exit rules from negative to positive out of sample, and stacks with the overshoot exit. Features come only from the prior window, so this is not the ``select on realised Sharpe'' trap.}
+  \label{fig:rma_walkforward}
+\end{figure*}
 
 \begin{table*}[t]
   \centering
@@ -942,78 +998,20 @@ Because $\beta$, $R_{\min}$ and the lookback $W$ are all hyperparameters, we sel
   \end{tabular}
 \end{table*}
 
+\begin{figure*}[t]
+  \centering
+  \includegraphics[width=0.96\textwidth]{figures/rma_fig09_cpcv.png}
+  \caption{\textbf{Disciplined CPCV result.} Left: per-fold significance of the recipe's edge---the paired daily Newey--West $t$ of (chosen $-$ baseline) clears $+1.96$ in all ten clean folds. Right: per-fold out-of-sample Sharpe; the chosen book's median sits above the baseline but the spread is wide, so the \emph{direction} is bankable while the \emph{level} is not.}
+  \label{fig:rma_cpcv}
+\end{figure*}
+\FloatBarrier
+
 \subsubsection{Economic interpretation and limitations}
 
 The economics are the same as elsewhere in this report. The no-arb-bound residual is a real convergence signal---when one venue's perpetual drifts above its asymmetric-$\kappa$ fair value relative to another's, capital that can simultaneously post margin on both venues is paid to push them back together---but the edge per crossing is thin and the slow-moving-capital friction that keeps the gap open is exactly what makes over-trading it ruinous. Honest accounting (the Perfect-Direction oracle) shows the constraint is turnover-cost, not direction; the durable improvement comes from delta-neutral discipline (overshoot exit $+$ pre-trade filter), not from a better forecast; and what ultimately bounds the result is neither signal nor capacity but \emph{calendar budget}. With only six out-of-sample months, purging at the full lookback erases nearly every validation month, forcing $W$ down to one month on feasibility grounds alone---a blunt statement that this sample cannot support purged cross-validation at a longer lookback. Two-month folds also share calendar time, so the CPCV distribution is a sensitivity analysis, not i.i.d.\ replication, and a causal-EMA smoothing screen (a fourth knob, redundant with overshoot) is left out for the same data-budget reason. The recipe and its leakage-safe validation are ready; what they need before any level of Sharpe can be trusted is more history, not more parameters.
 
-% --- All Strategy 2.2 figures collected after the text ---
-\clearpage
-\begin{figure*}[tp]
-  \centering
-  \includegraphics[width=\textwidth]{figures/rma_fig01_signal_geometry.png}
-  \caption{\textbf{Trading-signal geometry (asymmetric $\kappa$).} Left: the asymmetric residual $\rho^{AB}_t$ against the constant no-arb band $[\rho^{AB}_\ell,\rho^{AB}_u]$; the shaded interior is the no-trade region. Entries fire on a band crossing, the baseline exit is the zero-crossing. Right: the three-state machine the rules implement. The path shown is a synthetic mean-reverting process used only to expose the geometry.}
-  \label{fig:rma_geometry}
-\end{figure*}
-
-\begin{figure}[htbp]
-  \centering
-  \includegraphics[width=\linewidth]{figures/rma_fig02_baseline_equity.png}
-  \caption{\textbf{Baseline portfolio equity and drawdown.} Cumulative P\&L (top) and drawdown (bottom) of the equal-weight eligible-pair book. The signal is theory-grounded, but acting on every crossing bleeds steadily to a Sharpe of $-6.48$.}
-  \label{fig:rma_baseline}
-\end{figure}
-
-\begin{figure*}[tp]
-  \centering
-  \includegraphics[width=\textwidth]{figures/rma_fig03_pnl_decomposition.png}
-  \caption{\textbf{Pair P\&L decomposition, top and bottom Sharpe pairs.} Stacked price, funding, spread, fee and impact components as a share of notional; the black diamond is the net total. Losers carry ample gross edge but a larger cost stack---a turnover problem, not a signal problem.}
-  \label{fig:rma_decomp}
-\end{figure*}
-
-\begin{figure*}[tp]
-  \centering
-  \begin{minipage}[tp]{0.49\textwidth}
-    \centering
-    \includegraphics[width=\textwidth]{figures/rma_fig04_best_pair.png}
-  \end{minipage}\hfill
-  \begin{minipage}[tp]{0.49\textwidth}
-    \centering
-    \includegraphics[width=\textwidth]{figures/rma_fig05_worst_pair.png}
-  \end{minipage}
-  \caption{\textbf{Best versus worst pair diagnostics.} Each panel shows cumulative P\&L attribution, drawdown, the hourly signal against the no-arb band, and the minute-executed position. Left---best pair (BTC \textsc{hype}/\textsc{okex}, Sharpe $+1.33$): sparse positioning, gross edge clears cost. Right---worst pair (BERA \textsc{gate}/\textsc{hype}, Sharpe $-4.56$): near-continuous position flipping, cost overwhelms gross edge. (Note the differing $\rho$ scales between the two signal panels.)}
-  \label{fig:rma_pairdiag}
-\end{figure*}
-
-\begin{figure*}[tp]
-  \centering
-  \includegraphics[width=\textwidth]{figures/rma_fig06_oracle.png}
-  \caption{\textbf{Perfect-Direction oracle versus baseline.} Equal-weight cumulative P\&L (top) and drawdown (bottom). Perfect hourly foresight loses far \emph{more} than the baseline because it trades every bar: the constraint is execution cost at the implied turnover, not signal quality.}
-  \label{fig:rma_oracle}
-\end{figure*}
-
-\begin{figure*}[tp]
-  \centering
-  \includegraphics[width=\textwidth]{figures/rma_fig07_exit_variants.png}
-  \caption{\textbf{Exit-rule comparison.} Left: mean $\Delta$Sharpe versus baseline by family and parameter. Right: turnover reduction against net-return change---every family buys lower cost with some convergence give-back. Partial overshoot $\beta\approx0.5$ is the robust net winner.}
-  \label{fig:rma_variants}
-\end{figure*}
-
-\begin{figure*}[tp]
-  \centering
-  \includegraphics[width=\textwidth]{figures/rma_fig08_walkforward.png}
-  \caption{\textbf{Walk-forward out-of-sample equity: exit rule $\times$ pre-trade filter.} The filter lifts both exit rules from negative to positive out of sample, and stacks with the overshoot exit. Features come only from the prior window, so this is not the ``select on realised Sharpe'' trap.}
-  \label{fig:rma_walkforward}
-\end{figure*}
-
-\begin{figure*}[tp]
-  \centering
-  \includegraphics[width=\textwidth]{figures/rma_fig09_cpcv.png}
-  \caption{\textbf{Disciplined CPCV result.} Left: per-fold significance of the recipe's edge---the paired daily Newey--West $t$ of (chosen $-$ baseline) clears $+1.96$ in all ten clean folds. Right: per-fold out-of-sample Sharpe; the chosen book's median sits above the baseline but the spread is wide, so the \emph{direction} is bankable while the \emph{level} is not.}
-  \label{fig:rma_cpcv}
-\end{figure*}
-
 
 %% =====================================================================
-\clearpage
 \section{Strategy 3: A Dual-Engine Funding-plus-Momentum Long/Short Strategy}
 \label{sec:strat3}
 %% =====================================================================
@@ -1201,7 +1199,6 @@ intensive: moving capital across six exchanges introduces latency and
 margin-fragmentation costs that a backtest cannot fully model.
 
 %% =====================================================================
-\clearpage
 \section{Strategy 4: A Cost-Aware Positive Funding-Basis Carry}
 \label{sec:strat4}
 %% =====================================================================
@@ -1567,7 +1564,6 @@ that would require unmodelled spot borrowing.
 
 
 %% =====================================================================
-\clearpage
 \section{Strategy 5: Cross-Exchange Spread Capture and Negative Cash-and-Carry}
 \label{sec:strat5}
 %% =====================================================================
@@ -3324,7 +3320,6 @@ only one source.
 
 %% =====================================================================
 \balance
-\clearpage
 \section{Conclusion}
 \label{sec:conclusion}
 %% =====================================================================
