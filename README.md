@@ -13,7 +13,7 @@ Single combined LaTeX report merging all four contributions.
 2. **Strategy 1: Rule-Based Cross-Exchange Capture** — Chen Junan (3036555025);
    converted from `cja/report/main.typ`.
 3. **Strategy 2: Same-Asset Cross-Exchange Funding Strategies** — two
-   sub-strategies: **2.1** Payment-Aware Funding Carry, SIM Warren Hong
+   sub-strategies: **2.1** Payment-Aware Funding Carry, Warren Sim Hong
    (3036555893), from `warren_latex_package` (`warren_*` figures); **2.2**
    No-Arbitrage-Bound Convergence Trade, Wu Zeliang (3036556823), from
    `rma_latex` (`rma_fig*` figures).
